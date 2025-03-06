@@ -6,7 +6,7 @@ const bodyParser = require('body-parser');
 const { v4: uuidv4 } = require('uuid');
 const cors = require('cors');
 const dotenv = require('dotenv');
-const puppeteer = require('puppeteer');
+const puppeteer = require('puppeteer-core');
 const PDFDocument = require('pdfkit');
 const { createObjectCsvWriter } = require('csv-writer');
 const rateLimit = require('express-rate-limit');
@@ -361,59 +361,68 @@ async function updateScanData(scanId, updates) {
 
 async function launchBrowser() {
   try {
-    console.log('Launching browser with Puppeteer bundled Chromium');
+    console.log('Attempting to connect to browserless service');
     
-    // Get the path to the bundled executable
-    // Note: We need to use a specific approach here for Render compatibility
-    const chromePath = puppeteer.executablePath();
-    console.log(`Puppeteer executable path: ${chromePath}`);
+    // Free browserless service - we use browserless.io's free tier
+    // You can sign up for a free account at browserless.io to get your own token
+    const browserWSEndpoint = process.env.BROWSERLESS_WSS || 'wss://chrome.browserless.io?token=free';
     
-    // Launch the browser with explicit options
-    const browser = await puppeteer.launch({
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-accelerated-2d-canvas',
-        '--no-first-run',
-        '--no-zygote',
-        '--single-process',
-        '--disable-gpu'
-      ],
-      headless: true, // Use plain 'true' instead of 'new'
-      ignoreHTTPSErrors: true,
-      dumpio: true // Log browser process stdout and stderr
+    // Connect to the remote browser
+    const browser = await puppeteer.connect({
+      browserWSEndpoint,
+      ignoreHTTPSErrors: true
     });
     
-    console.log('Browser launched successfully');
+    console.log('Successfully connected to browserless service');
     return browser;
   } catch (error) {
-    console.error('Failed to launch browser:', error);
-    console.error('Full error details:', error);
+    console.error('Error connecting to browserless service:', error);
     
-    // Try again with more detailed error logging
+    // As a fallback, try to launch locally if available
     try {
-      console.log('Attempting alternative launch method...');
+      console.log('Attempting local browser launch as fallback');
       
-      // Log the browsers that Puppeteer knows about
-      try {
-        const revInfo = await puppeteer.revisionInfo();
-        console.log('Revision info:', revInfo);
-      } catch (e) {
-        console.error('Could not get revision info:', e);
+      // Try common Chrome locations
+      const possiblePaths = [
+        '/usr/bin/google-chrome',
+        '/usr/bin/chromium-browser',
+        '/usr/bin/chromium',
+        process.env.CHROME_PATH || ''
+      ].filter(Boolean);
+      
+      // Find the first browser that exists
+      let executablePath = null;
+      for (const path of possiblePaths) {
+        try {
+          await fs.access(path);
+          executablePath = path;
+          console.log(`Found Chrome at ${executablePath}`);
+          break;
+        } catch (e) {
+          // Path doesn't exist, try next one
+        }
       }
       
-      // Try a more direct launch approach
+      if (!executablePath) {
+        throw new Error('No local Chrome installation found');
+      }
+      
+      // Launch browser locally
       const browser = await puppeteer.launch({
-        args: ['--no-sandbox'],
-        headless: true,
-        ignoreHTTPSErrors: true
+        executablePath,
+        args: [
+          '--no-sandbox',
+          '--disable-setuid-sandbox',
+          '--disable-dev-shm-usage',
+          '--disable-gpu'
+        ],
+        headless: true
       });
       
-      console.log('Alternative launch succeeded');
+      console.log('Local browser launched successfully');
       return browser;
-    } catch (retryError) {
-      console.error('Alternative launch also failed:', retryError);
+    } catch (fallbackError) {
+      console.error('Both remote and local browser launch failed:', fallbackError);
       throw error; // Throw the original error
     }
   }
