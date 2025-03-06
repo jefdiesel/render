@@ -663,7 +663,6 @@ async function sendErrorEmail(email, url, scanId, errorMessage) {
           
           <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #e5e7eb; font-size: 12px; color: #6b7280; text-align: center;">
             <p>© ${new Date().getFullYear()} A11yscan. All rights reserved.</p>
-            <p>If you have any questions, please contact us at <a href="mailto:hello@a11yscan.xyz" style="color: #4f46e5;">hello@a11yscan.xyz
 
     <p>If you have any questions, please contact us at <a href="mailto:hello@a11yscan.xyz" style="color: #4f46e5;">hello@a11yscan.xyz</a></p>
           </div>
