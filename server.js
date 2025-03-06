@@ -1,6 +1,398 @@
-// Function to send results email
-async function sendResultsEmail(email, url, scanId, reportUrl, summary) {
+const express = require('express');
+const path = require('path');
+const fs = require('fs').promises;
+const nodemailer = require('nodemailer');
+const bodyParser = require('body-parser');
+const { v4: uuidv4 } = require('uuid');
+const cors = require('cors');
+const dotenv = require('dotenv');
+const puppeteer = require('puppeteer');
+const PDFDocument = require('pdfkit');
+const { createObjectCsvWriter } = require('csv-writer');
+
+// Load environment variables
+dotenv.config();
+
+const app = express();
+const port = process.env.PORT || 3000;
+
+// Middleware
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: true }));
+
+// Configure CORS
+app.use(cors({
+  origin: ['https://a11yscan.xyz', 'http://localhost:3000'],
+  methods: ['GET', 'POST'],
+  allowedHeaders: ['Content-Type', 'X-API-Key']
+}));
+
+// Rate limiting
+const rateLimit = require('express-rate-limit');
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5, // limit each IP to 5 requests per windowMs
+  message: { error: 'Too many requests, please try again later.' }
+});
+
+// Apply rate limiting to the free scan endpoint
+app.use('/api/free-scan', limiter);
+
+// Configure email transporter
+const transporter = nodemailer.createTransport({
+  host: process.env.EMAIL_HOST,
+  port: process.env.EMAIL_PORT,
+  secure: process.env.EMAIL_SECURE === 'true',
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS
+  }
+});
+
+// Ensure necessary directories exist
+async function ensureDirectoriesExist() {
+  const dirs = [
+    path.join(__dirname, 'data'),
+    path.join(__dirname, 'reports'),
+    path.join(__dirname, 'reports', 'pdf'),
+    path.join(__dirname, 'reports', 'csv')
+  ];
+  
+  for (const dir of dirs) {
+    try {
+      await fs.mkdir(dir, { recursive: true });
+    } catch (error) {
+      console.error(`Error creating directory ${dir}:`, error);
+    }
+  }
+}
+
+// Call this on server start
+ensureDirectoriesExist();
+
+// Health check endpoint
+app.get('/', (req, res) => {
+  res.json({ 
+    status: 'ok',
+    message: 'A11yscan API is running',
+    version: '1.0.0'
+  });
+});
+
+// Handle free scan submissions
+app.post('/api/free-scan', async (req, res) => {
   try {
+    const { url, email, consent } = req.body;
+    
+    // Validate request
+    if (!url || !email) {
+      return res.status(400).json({ error: 'URL and email are required' });
+    }
+    
+    // Validate URL
+    try {
+      new URL(url);
+    } catch (error) {
+      return res.status(400).json({ error: 'Invalid URL format' });
+    }
+    
+    // Validate email (simple regex)
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({ error: 'Invalid email format' });
+    }
+    
+    // Generate unique scan ID
+    const scanId = uuidv4();
+    
+    // Store scan request
+    await storeScanRequest(scanId, url, email);
+    
+    // Send confirmation email
+    await sendConfirmationEmail(email, url, scanId);
+    
+    // Initiate scan process in background
+    initiateFreeScan(scanId, url, email).catch(error => {
+      console.error(`Error starting scan ${scanId}:`, error);
+    });
+    
+    // Return success response
+    res.status(202).json({ 
+      success: true, 
+      message: 'Scan request received. You will receive the results via email shortly.',
+      scanId
+    });
+  } catch (error) {
+    console.error('Error handling free scan request:', error);
+    res.status(500).json({ error: 'An error occurred while processing your request.' });
+  }
+});
+
+// Check scan status endpoint
+app.get('/api/scan-status/:scanId', async (req, res) => {
+  try {
+    const { scanId } = req.params;
+    
+    // Get scan data from storage
+    const scanData = await getScanData(scanId);
+    
+    if (!scanData) {
+      return res.status(404).json({ error: 'Scan not found' });
+    }
+    
+    res.status(200).json({
+      scanId: scanData.scanId,
+      url: scanData.url,
+      status: scanData.status,
+      createdAt: scanData.createdAt,
+      completedAt: scanData.completedAt || null,
+      pagesScanned: scanData.pagesScanned || 0,
+      pagesFound: scanData.pagesFound || 0,
+      issues: scanData.issues || null
+    });
+  } catch (error) {
+    console.error('Error checking scan status:', error);
+    res.status(500).json({ error: 'An error occurred while checking scan status.' });
+  }
+});
+
+// Get scan details endpoint
+app.get('/api/scan/:scanId', async (req, res) => {
+  try {
+    const { scanId } = req.params;
+    
+    // Get scan data from storage
+    const scanData = await getScanData(scanId);
+    
+    if (!scanData) {
+      return res.status(404).json({ error: 'Scan not found' });
+    }
+    
+    // Prepare reports URLs if scan is complete
+    let reports = null;
+    if (scanData.status === 'completed') {
+      reports = {
+        pdf: `https://render-cpug.onrender.com/api/reports/${scanId}/pdf`,
+        csv: `https://render-cpug.onrender.com/api/reports/${scanId}/csv`
+      };
+    }
+    
+    // Return scan data
+    res.status(200).json({
+      scanId: scanData.scanId,
+      url: scanData.url,
+      status: scanData.status,
+      requestedAt: scanData.createdAt,
+      completedAt: scanData.completedAt || null,
+      pagesScanned: scanData.pagesScanned || 0,
+      pagesFound: scanData.pagesFound || 0,
+      issues: scanData.issues || null,
+      reports
+    });
+  } catch (error) {
+    console.error('Error getting scan details:', error);
+    res.status(500).json({ error: 'An error occurred while getting scan details.' });
+  }
+});
+
+// Get detailed scan results
+app.get('/api/scan/:scanId/details', async (req, res) => {
+  try {
+    const { scanId } = req.params;
+    
+    // Get scan data from storage
+    const scanData = await getScanData(scanId);
+    
+    if (!scanData) {
+      return res.status(404).json({ error: 'Scan not found' });
+    }
+    
+    // Return detailed results
+    res.status(200).json({
+      scanId: scanData.scanId,
+      url: scanData.url,
+      requestedAt: scanData.createdAt,
+      status: scanData.status,
+      results: scanData.results || []
+    });
+  } catch (error) {
+    console.error('Error getting detailed scan results:', error);
+    res.status(500).json({ error: 'An error occurred while getting detailed scan results.' });
+  }
+});
+
+// Serve PDF report
+app.get('/api/reports/:scanId/pdf', async (req, res) => {
+  try {
+    const { scanId } = req.params;
+    const pdfPath = path.join(__dirname, 'reports', 'pdf', `${scanId}.pdf`);
+    
+    try {
+      await fs.access(pdfPath);
+    } catch (error) {
+      return res.status(404).json({ error: 'PDF report not found' });
+    }
+    
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${scanId}.pdf"`);
+    
+    const fileStream = fs.createReadStream(pdfPath);
+    fileStream.pipe(res);
+  } catch (error) {
+    console.error('Error serving PDF report:', error);
+    res.status(500).json({ error: 'Error serving PDF report' });
+  }
+});
+
+// Serve CSV report
+app.get('/api/reports/:scanId/csv', async (req, res) => {
+  try {
+    const { scanId } = req.params;
+    const csvPath = path.join(__dirname, 'reports', 'csv', `${scanId}.csv`);
+    
+    try {
+      await fs.access(csvPath);
+    } catch (error) {
+      return res.status(404).json({ error: 'CSV report not found' });
+    }
+    
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="${scanId}.csv"`);
+    
+    const fileStream = fs.createReadStream(csvPath);
+    fileStream.pipe(res);
+  } catch (error) {
+    console.error('Error serving CSV report:', error);
+    res.status(500).json({ error: 'Error serving CSV report' });
+  }
+});
+
+// Function to store scan request in database or file
+async function storeScanRequest(scanId, url, email) {
+  // This is a simplified version that stores data in a JSON file
+  const scanData = {
+    scanId,
+    url,
+    email,
+    status: 'pending',
+    createdAt: new Date().toISOString(),
+    completedAt: null,
+    pagesScanned: 0,
+    pagesFound: 0,
+    issues: null,
+    results: []
+  };
+  
+  try {
+    // Write scan data to file
+    await fs.writeFile(
+      path.join(__dirname, 'data', `${scanId}.json`),
+      JSON.stringify(scanData, null, 2)
+    );
+    
+    console.log(`Scan request stored: ${scanId}`);
+    return true;
+  } catch (error) {
+    console.error('Error storing scan request:', error);
+    throw error;
+  }
+}
+
+// Function to retrieve scan data
+async function getScanData(scanId) {
+  try {
+    const filePath = path.join(__dirname, 'data', `${scanId}.json`);
+    const data = await fs.readFile(filePath, 'utf8');
+    return JSON.parse(data);
+  } catch (error) {
+    console.error(`Error retrieving scan data for ${scanId}:`, error);
+    return null;
+  }
+}
+
+// Function to update scan data
+async function updateScanData(scanId, updates) {
+  try {
+    // Get current scan data
+    const scanData = await getScanData(scanId);
+    
+    if (!scanData) {
+      throw new Error(`Scan data not found for ${scanId}`);
+    }
+    
+    // Apply updates
+    const updatedData = { ...scanData, ...updates };
+    
+    // Write updated data back to file
+    await fs.writeFile(
+      path.join(__dirname, 'data', `${scanId}.json`),
+      JSON.stringify(updatedData, null, 2)
+    );
+    
+    console.log(`Scan data updated: ${scanId}`);
+    return true;
+  } catch (error) {
+    console.error(`Error updating scan data for ${scanId}:`, error);
+    throw error;
+  }
+}
+
+// Function to send confirmation email
+async function sendConfirmationEmail(email, url, scanId) {
+  try {
+    const mailOptions = {
+      from: `"A11yscan" <${process.env.EMAIL_FROM}>`,
+      to: email,
+      subject: 'Your A11yscan Accessibility Scan Has Started',
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <div style="text-align: center; margin-bottom: 20px;">
+            <img src="https://a11yscan.xyz/images/a11yscan-logo.svg" alt="A11yscan Logo" width="180" height="50" style="display: inline-block;">
+          </div>
+          
+          <h1 style="color: #4f46e5; margin-bottom: 20px;">Your Accessibility Scan Has Started</h1>
+          
+          <p>Hello,</p>
+          
+          <p>Thank you for using A11yscan! We've started scanning your website for accessibility issues.</p>
+          
+          <div style="background-color: #f3f4f6; padding: 15px; border-radius: 5px; margin: 20px 0;">
+            <p style="margin: 0;"><strong>Website URL:</strong> ${url}</p>
+            <p style="margin: 10px 0 0;"><strong>Scan ID:</strong> ${scanId}</p>
+          </div>
+          
+          <p>We're scanning up to 5 pages on your site to identify potential accessibility issues. This process typically takes 5-10 minutes to complete.</p>
+          
+          <p>Once the scan is finished, we'll send you another email with your detailed accessibility report.</p>
+          
+          <p>In the meantime, you can check your scan status <a href="https://a11yscan.xyz/scan-status/${scanId}" style="color: #4f46e5;">here</a>.</p>
+          
+          <p>Thank you for making the web more accessible for everyone!</p>
+          
+          <p>Best regards,<br>The A11yscan Team</p>
+          
+          <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #e5e7eb; font-size: 12px; color: #6b7280; text-align: center;">
+            <p>© 2023 A11yscan. All rights reserved.</p>
+            <p>If you have any questions, please contact us at <a href="mailto:hello@a11yscan.xyz" style="color: #4f46e5;">hello@a11yscan.xyz</a></p>
+          </div>
+        </div>
+      `
+    };
+    
+    await transporter.sendMail(mailOptions);
+    console.log(`Confirmation email sent to ${email} for scan ${scanId}`);
+    return true;
+  } catch (error) {
+    console.error(`Error sending confirmation email for ${scanId}:`, error);
+    throw error;
+  }
+}
+
+// Function to send results email
+async function sendResultsEmail(email, url, scanId, summary) {
+  try {
+    const reportUrl = `https://a11yscan.xyz/reports/${scanId}`;
+    
     const mailOptions = {
       from: `"A11yscan" <${process.env.EMAIL_FROM}>`,
       to: email,
@@ -70,139 +462,6 @@ async function sendResultsEmail(email, url, scanId, reportUrl, summary) {
   }
 }
 
-// Function to initiate a free scan (limited to 5 pages)
-async function initiateFreeScan(scanId, url, email) {
-  try {
-    // Update scan status to running
-    await updateScanStatus(scanId, 'running');
-    
-    // Call your WCAG scanner API
-    // For this example, we're assuming your scanner API is accessible via HTTP
-    // In a real implementation, you might use a direct function call or message queue
-    const apiUrl = process.env.SCANNER_API_URL;
-    const apiKey = process.env.SCANNER_API_KEY;
-    
-    const scanOptions = {
-      url: url,
-      maxPages: 5, // Limit free scans to 5 pages
-      maxDepth: 3,
-      scanId: scanId,
-      returnUrl: `https://a11yscan.xyz/reports/${scanId}`
-    };
-    
-    // Send request to your scanner API
-    const response = await axios.post(`${apiUrl}/api/scan`, scanOptions, {
-      headers: {
-        'X-API-Key': apiKey,
-        'Content-Type': 'application/json'
-      }
-    });
-    
-    if (response.status !== 202) {
-      throw new Error(`Unexpected API response: ${response.status}`);
-    }
-    
-    console.log(`Scan initiated for ${url} with ID ${scanId}`);
-    
-    // Now we need to monitor the scan status until it completes
-    // This is a simplified example - in production you'd use a job queue
-    await monitorScanStatus(scanId, url, email);
-    
-  } catch (error) {
-    console.error(`Error initiating scan for ${scanId}:`, error);
-    await updateScanStatus(scanId, 'failed');
-    
-    // Send error notification email
-    try {
-      await sendErrorEmail(email, url, scanId, error.message);
-    } catch (emailError) {
-      console.error(`Failed to send error email for ${scanId}:`, emailError);
-    }
-  }
-}
-
-// Function to monitor scan status
-async function monitorScanStatus(scanId, url, email) {
-  // In a real implementation, this would be handled by a job queue/worker
-  // For simplicity, we're using a polling approach here
-  
-  const maxAttempts = 60; // 30 minutes (checking every 30 seconds)
-  let attempts = 0;
-  
-  const checkStatus = async () => {
-    try {
-      attempts++;
-      
-      // Get scan status from your scanner API
-      const apiUrl = process.env.SCANNER_API_URL;
-      const apiKey = process.env.SCANNER_API_KEY;
-      
-      const response = await axios.get(`${apiUrl}/api/scan/${scanId}`, {
-        headers: {
-          'X-API-Key': apiKey
-        }
-      });
-      
-      const status = response.data.status;
-      
-      if (status === 'completed') {
-        // Scan completed successfully
-        await updateScanStatus(scanId, 'completed', new Date().toISOString());
-        
-        // Get report URL
-        const reportUrl = `https://a11yscan.xyz/reports/${scanId}`;
-        
-        // Create summary from scan results
-        const summary = {
-          pagesScanned: response.data.pagesScanned || 0,
-          totalIssues: response.data.issues?.total || 0,
-          criticalIssues: response.data.issues?.critical || 0,
-          warningIssues: response.data.issues?.warning || 0,
-          infoIssues: response.data.issues?.info || 0
-        };
-        
-        // Send results email
-        await sendResultsEmail(email, url, scanId, reportUrl, summary);
-        
-        return;
-      } else if (status === 'failed') {
-        // Scan failed
-        await updateScanStatus(scanId, 'failed');
-        
-        // Send error email
-        await sendErrorEmail(email, url, scanId, 'The scan failed to complete. Please try again later.');
-        
-        return;
-      } else if (attempts >= maxAttempts) {
-        // Timeout reached
-        await updateScanStatus(scanId, 'timeout');
-        
-        // Send timeout email
-        await sendErrorEmail(email, url, scanId, 'The scan timed out. This might be due to a very large website or connectivity issues.');
-        
-        return;
-      }
-      
-      // If still running, check again after delay
-      setTimeout(checkStatus, 30000); // Check every 30 seconds
-      
-    } catch (error) {
-      console.error(`Error checking status for scan ${scanId}:`, error);
-      
-      if (attempts >= maxAttempts) {
-        await updateScanStatus(scanId, 'error');
-        await sendErrorEmail(email, url, scanId, 'An error occurred while monitoring the scan.');
-      } else {
-        // Retry after delay
-        setTimeout(checkStatus, 30000);
-      }
-    }
-  };
-  
-  // Start monitoring
-  setTimeout(checkStatus, 10000); // First check after 10 seconds
-}
-
 // Function to send error email
 async function sendErrorEmail(email, url, scanId, errorMessage) {
   try {
@@ -267,17 +526,257 @@ async function sendErrorEmail(email, url, scanId, errorMessage) {
   }
 }
 
-// Serve scan status page
-app.get('/scan-status/:scanId', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'scan-status.html'));
-});
+// Helper function to safely parse JSON with a fallback
+function safeJsonParse(jsonString, fallback) {
+  try {
+    return jsonString ? JSON.parse(jsonString) : fallback;
+  } catch (error) {
+    return fallback;
+  }
+}
 
-// Serve report page
-app.get('/reports/:scanId', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'report.html'));
-});
+// Simple function to normalize a URL for file naming
+function sanitizeUrlForFilename(url) {
+  return url
+    .replace(/^https?:\/\//, '')
+    .replace(/[^a-z0-9]/gi, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+    .toLowerCase();
+}
 
-// Start the server
-app.listen(port, () => {
-  console.log(`A11yscan website running on port ${port}`);
-});
+// Function to initiate a free scan (limited to 5 pages)
+async function initiateFreeScan(scanId, url, email) {
+  try {
+    // Update scan status to running
+    await updateScanData(scanId, { status: 'running' });
+    
+    // Start the actual scanner
+    const result = await performScan(url, scanId, 5);
+    
+    // Update scan status and data
+    await updateScanData(scanId, {
+      status: 'completed',
+      completedAt: new Date().toISOString(),
+      pagesScanned: result.pagesScanned,
+      pagesFound: result.pagesFound,
+      issues: result.issues,
+      results: result.results
+    });
+    
+    // Generate PDF and CSV reports
+    await generateReports(scanId, url, result);
+    
+    // Send results email
+    await sendResultsEmail(email, url, scanId, {
+      pagesScanned: result.pagesScanned,
+      totalIssues: result.issues.total,
+      criticalIssues: result.issues.critical,
+      warningIssues: result.issues.warning,
+      infoIssues: result.issues.info
+    });
+    
+  } catch (error) {
+    console.error(`Error in scan ${scanId}:`, error);
+    
+    // Update scan status to failed
+    await updateScanData(scanId, { status: 'failed' });
+    
+    // Send error notification email
+    await sendErrorEmail(email, url, scanId, error.message || 'An unexpected error occurred during the scan.');
+  }
+}
+
+// Function to perform the actual scan
+async function performScan(url, scanId, maxPages = 5) {
+  console.log(`Starting scan of ${url} with scan ID ${scanId}`);
+  
+  // Launch browser
+  const browser = await puppeteer.launch({
+    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
+    headless: true
+  });
+  
+  try {
+    // Set up results structure
+    const results = {
+      pagesScanned: 0,
+      pagesFound: 0,
+      issues: {
+        total: 0,
+        critical: 0,
+        warning: 0,
+        info: 0
+      },
+      results: []
+    };
+    
+    // Queue of URLs to scan
+    const queue = [url];
+    const scanned = new Set();
+    const found = new Set([url]);
+    
+    // Process queue
+    while (queue.length > 0 && results.pagesScanned < maxPages) {
+      const currentUrl = queue.shift();
+      
+      // Skip if already scanned
+      if (scanned.has(currentUrl)) continue;
+      
+      console.log(`Scanning page ${results.pagesScanned + 1}/${maxPages}: ${currentUrl}`);
+      
+      // Mark as scanned
+      scanned.add(currentUrl);
+      
+      try {
+        // Create a new page
+        const page = await browser.newPage();
+        await page.setViewport({ width: 1280, height: 800 });
+        await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.45 Safari/537.36 WCAG-Scanner/1.0');
+        
+        // Navigate to URL
+        await page.goto(currentUrl, { 
+          waitUntil: 'networkidle2',
+          timeout: 30000
+        });
+        
+        // Wait for page to fully load
+        await page.waitForTimeout(2000);
+        
+        // Run accessibility tests
+        const accessibilityResults = await runAccessibilityTests(page);
+        
+        // Extract links if we need more pages
+        let links = [];
+        if (results.pagesScanned < maxPages - 1) {
+          links = await extractLinks(page, url);
+          
+          // Add new links to queue and found set
+          links.forEach(link => {
+            if (!found.has(link)) {
+              found.add(link);
+              queue.push(link);
+            }
+          });
+        }
+        
+        // Close page
+        await page.close();
+        
+        // Add to results
+        results.results.push({
+          url: currentUrl,
+          status: 200,
+          scannedAt: new Date().toISOString(),
+          violationCounts: accessibilityResults.violationCounts,
+          violations: accessibilityResults.violations,
+          links: links
+        });
+        
+        // Update counts
+        results.pagesScanned++;
+        results.issues.total += accessibilityResults.violationCounts.total;
+        results.issues.critical += accessibilityResults.violationCounts.critical;
+        results.issues.warning += accessibilityResults.violationCounts.warning;
+        results.issues.info += accessibilityResults.violationCounts.info;
+        
+      } catch (error) {
+        console.error(`Error scanning ${currentUrl}:`, error);
+        
+        // Add error result
+        results.results.push({
+          url: currentUrl,
+          status: 500,
+          scannedAt: new Date().toISOString(),
+          error: error.message,
+          violationCounts: { total: 0, critical: 0, warning: 0, info: 0 },
+          violations: [],
+          links: []
+        });
+        
+        results.pagesScanned++;
+      }
+    }
+    
+    // Update found pages count
+    results.pagesFound = found.size;
+    
+    return results;
+    
+  } finally {
+    // Close browser
+    await browser.close();
+  }
+}
+
+// Function to run accessibility tests on a page
+async function runAccessibilityTests(page) {
+  // Inject axe-core library
+  await page.addScriptTag({
+    path: require.resolve('axe-core')
+  });
+  
+  // Run axe analysis
+  const results = await page.evaluate(() => {
+    return new Promise(resolve => {
+      // @ts-ignore (axe is injected)
+      axe.run(document, {
+        runOnly: {
+          type: 'tag',
+          values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'best-practice']
+        }
+      }, (err, results) => {
+        if (err) resolve({ error: err.message });
+        resolve(results);
+      });
+    });
+  });
+  
+  // Calculate violation counts
+  const violationCounts = {
+    total: 0,
+    critical: 0,
+    warning: 0,
+    info: 0
+  };
+  
+  if (results.violations) {
+    results.violations.forEach(violation => {
+      const nodeCount = violation.nodes?.length || 0;
+      violationCounts.total += nodeCount;
+      
+      // Map impact levels to our severity categories
+      switch (violation.impact) {
+        case 'critical':
+        case 'serious':
+          violationCounts.critical += nodeCount;
+          break;
+        case 'moderate':
+        case 'minor':
+          violationCounts.warning += nodeCount;
+          break;
+        default:
+          violationCounts.info += nodeCount;
+          break;
+      }
+    });
+  }
+  
+  return {
+    violations: results.violations || [],
+    passes: results.passes || [],
+    incomplete: results.incomplete || [],
+    violationCounts
+  };
+}
+
+// Function to extract links from a page
+async function extractLinks(page, baseUrl) {
+  const baseHostname = new URL(baseUrl).hostname;
+  
+  const links = await page.evaluate((baseHostname) => {
+    return Array.from(document.querySelectorAll('a[href]'))
+      .map(a => {
+        try {
+          const href = a.href;
+          if (!href) return
