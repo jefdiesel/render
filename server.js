@@ -816,11 +816,12 @@ const browser = await puppeteer.launch({
     '--disable-gpu'
     ],
     // Use Render’s preinstalled Chromium if in production
-    executablePath: process.env.NODE_ENV === 'production' 
-      ? '/usr/bin/chromium-browser' // Render’s default Chromium path
-      : puppeteer.executablePath(),
-    headless: true
-  });  
+#    executablePath: process.env.NODE_ENV === 'production' 
+ #     ? '/usr/bin/chromium-browser' // Render’s default Chromium path
+  #    : puppeteer.executablePath(),
+#    headless: true
+executablePath: process.env.CHROMIUM_PATH || puppeteer.executablePath(), 
+ });  
   try {
     // Set up results structure
     const results = {
