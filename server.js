@@ -804,11 +804,23 @@ function calculateAccessibilityScore(result) {
 async function performScan(url, scanId, maxPages = 5) {
   console.log(`Starting scan of ${url} with scan ID ${scanId}`);
   
-  // Launch browser
-  const browser = await puppeteer.launch({
-    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
-    headless: true
-  });
+// Launch browser
+const browser = await puppeteer.launch({
+  args: [
+    '--no-sandbox',
+    '--disable-setuid-sandbox',
+    '--disable-dev-shm-usage',
+    '--disable-accelerated-2d-canvas',
+    '--no-first-run',
+    '--no-zygote',
+    '--single-process',
+    '--disable-gpu'
+  ],
+  executablePath: process.env.NODE_ENV === 'production' 
+    ? '/usr/bin/chromium-browser'  // Use system Chromium on Render
+    : puppeteer.executablePath(),  // Use bundled Chromium locally
+  headless: true
+});
   
   try {
     // Set up results structure
