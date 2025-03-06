@@ -814,13 +814,13 @@ const browser = await puppeteer.launch({
     '--no-zygote',
     '--single-process',
     '--disable-gpu'
-],
-  executablePath: process.env.NODE_ENV === 'production' 
-    ? '/usr/bin/chromium' || '/usr/bin/google-chrome' || puppeteer.executablePath()
-    : puppeteer.executablePath(),
-  headless: true
-});
-  
+    ],
+    // Use Render’s preinstalled Chromium if in production
+    executablePath: process.env.NODE_ENV === 'production' 
+      ? '/usr/bin/chromium-browser' // Render’s default Chromium path
+      : puppeteer.executablePath(),
+    headless: true
+  });  
   try {
     // Set up results structure
     const results = {
