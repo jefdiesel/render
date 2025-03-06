@@ -118,38 +118,6 @@ app.post('/api/free-scan', async (req, res) => {
     
     // Send confirmation email
     await sendConfirmationEmail(email, url, scanId);
-// Function to launch browser with error handling
-async function launchBrowser() {
-  try {
-    const browser = await puppeteer.launch({
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-accelerated-2d-canvas',
-        '--no-first-run',
-        '--no-zygote',
-        '--single-process',
-        '--disable-gpu'
-      ],
-      headless: 'new', // Use the new headless mode
-      defaultViewport: null, // Allows setting viewport dynamically
-      executablePath: process.env.CHROMIUM_PATH || puppeteer.executablePath()
-    });
-    return browser;
-  } catch (error) {
-    console.error('Failed to launch browser:', error);
-    // Log detailed error information
-    console.error('Error details:', {
-      message: error.message,
-      stack: error.stack,
-      chromiumPath: process.env.CHROMIUM_PATH,
-      defaultExecutablePath: puppeteer.executablePath()
-    });
-    
-    throw error;
-  }
-}
     
     // Initiate scan process in background
     initiateFreeScan(scanId, url, email, {
