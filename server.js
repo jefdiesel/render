@@ -117,6 +117,38 @@ app.post('/api/free-scan', async (req, res) => {
     
     // Send confirmation email
     await sendConfirmationEmail(email, url, scanId);
+// Function to launch browser with error handling
+async function launchBrowser() {
+  try {
+    const browser = await puppeteer.launch({
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-accelerated-2d-canvas',
+        '--no-first-run',
+        '--no-zygote',
+        '--single-process',
+        '--disable-gpu'
+      ],
+      headless: 'new', // Use the new headless mode
+      defaultViewport: null, // Allows setting viewport dynamically
+      executablePath: process.env.CHROMIUM_PATH || puppeteer.executablePath()
+    });
+    return browser;
+  } catch (error) {
+    console.error('Failed to launch browser:', error);
+    // Log detailed error information
+    console.error('Error details:', {
+      message: error.message,
+      stack: error.stack,
+      chromiumPath: process.env.CHROMIUM_PATH,
+      defaultExecutablePath: puppeteer.executablePath()
+    });
+    
+    throw error;
+  }
+}
     
     // Initiate scan process in background
     initiateFreeScan(scanId, url, email, {
@@ -799,29 +831,12 @@ function calculateAccessibilityScore(result) {
 }
 
 // Function to perform the actual scan
+// Function to perform the actual scan
 async function performScan(url, scanId, maxPages = 5) {
   console.log(`Starting scan of ${url} with scan ID ${scanId}`);
   
-// Launch browser
-const browser = await puppeteer.launch({
-  args: [
-    '--no-sandbox',
-    '--disable-setuid-sandbox',
-    '--disable-dev-shm-usage',
-    '--disable-accelerated-2d-canvas',
-    '--no-first-run',
-    '--no-zygote',
-    '--single-process',
-    '--disable-gpu'
-    ],
-
-// Use Render's preinstalled Chromium if in production
-  executablePath: process.env.CHROMIUM_PATH || puppeteer.executablePath(),
-  
-  // Add these Render-specific options
-  headless: 'new', // Use the new headless mode
-  defaultViewport: null // Allows setting viewport dynamically
-});
+  // Launch browser using the new launchBrowser function
+  const browser = await launchBrowser();
 
   try {
     // Set up results structure
@@ -934,7 +949,6 @@ const browser = await puppeteer.launch({
     await browser.close();
   }
 }
-
 // Function to run accessibility tests on a page
 async function runAccessibilityTests(page) {
   // Inject axe-core library
