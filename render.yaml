@@ -5,3 +5,19 @@ services:
     repo: https://github.com/jefdiesel/render
     branch: main
     dockerfilePath: ./Dockerfile
+    env: static
+    envVars:
+      - key: EMAIL_FROM
+        value: hello@a11yscan.xyz
+      - key: EMAIL_HOST
+        value: smtp.dreamhost.com
+      - key: EMAIL_PASS
+        value: xXwV*sZH
+      - key: EMAIL_PORT
+        value: 465
+      - key: EMAIL_SECURE
+        value: true
+      - key: EMAIL_USER
+        value: hello@a11yscan.xyz
+      - key: ERROR_EMAIL
+        value: errors@a11yscan.org
