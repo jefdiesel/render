@@ -750,22 +750,22 @@ async function initiateFreeScan(scanId, url, email, options = {}) {
       await sendDeepScanNotification(options.adminEmail || 'hello@a11yscan.xyz', url, scanId, accessibilityScore);
     }
     
-  } catch (error) {
-    console.error(`Error in scan ${scanId}:`, error);
-    
-    // Update scan status to failed
-    await updateScanData(scanId, { status: 'failed' });
-    
-    // Send error notification email
-    await sendErrorEmail(email, url, scanId, error.message || 'An unexpected error occurred during the scan.');
-    
-    // Also notify admin about the error
-    if (options.sendCopyToAdmin && options.adminEmail) {
-      await sendErrorEmail(
-        options.adminEmail, 
-        url, 
-        scanId, 
-        `Error scanning ${url} requested by ${email}: ${error.message || 'An unexpected error occurred'}`
+} catch (error) {
+  console.error(`Error in scan ${scanId}:`, error);
+  
+  // Update scan status to failed
+  await updateScanData(scanId, { status: 'failed' });
+  
+  // Only send error notification to admin, not to the user
+  await sendErrorEmail('errors@a11yscan.xyz', url, scanId, 
+    `Error scanning ${url} requested by ${email}: ${error.message || 'An unexpected error occurred'}`);
+  
+  // Still send a notification to the user but without detailed error
+  await sendErrorEmail(
+    email, 
+    url, 
+    scanId, 
+    'We encountered an issue while scanning your website. Our team has been notified and will investigate.'
       );
     }
   }
@@ -815,10 +815,10 @@ const browser = await puppeteer.launch({
     '--no-zygote',
     '--single-process',
     '--disable-gpu'
-  ],
+],
   executablePath: process.env.NODE_ENV === 'production' 
-    ? '/usr/bin/chromium-browser'  // Use system Chromium on Render
-    : puppeteer.executablePath(),  // Use bundled Chromium locally
+    ? '/usr/bin/chromium' || '/usr/bin/google-chrome' || puppeteer.executablePath()
+    : puppeteer.executablePath(),
   headless: true
 });
   
