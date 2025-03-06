@@ -1,0 +1,31 @@
+{
+  "name": "a11yscan",
+  "version": "1.0.0",
+  "description": "Accessibility scanner for websites using axe-core",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js"
+  },
+  "dependencies": {
+    "axe-core": "^4.7.0",
+    "body-parser": "^1.20.2",
+    "cors": "^2.8.5",
+    "csv-writer": "^1.6.0",
+    "dotenv": "^16.0.3",
+    "express": "^4.18.2",
+    "express-rate-limit": "^6.7.0",
+    "nodemailer": "^6.9.1",
+    "pdfkit": "^0.13.0",
+    "puppeteer": "^19.7.0",
+    "uuid": "^9.0.0"
+  },
+  "devDependencies": {
+    "nodemon": "^2.0.22"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "author": "",
+  "license": "MIT"
+}

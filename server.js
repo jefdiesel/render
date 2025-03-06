@@ -22,7 +22,9 @@ app.use(bodyParser.urlencoded({ extended: true }));
 
 // Configure CORS
 app.use(cors({
-  origin: ['https://a11yscan.xyz', 'http://localhost:3000'],
+  origin: process.env.NODE_ENV === 'production' 
+    ? ['https://a11yscan.xyz'] 
+    : ['http://localhost:3000'],
   methods: ['GET', 'POST'],
   allowedHeaders: ['Content-Type', 'X-API-Key']
 }));
@@ -55,7 +57,9 @@ async function ensureDirectoriesExist() {
     path.join(__dirname, 'data'),
     path.join(__dirname, 'reports'),
     path.join(__dirname, 'reports', 'pdf'),
-    path.join(__dirname, 'reports', 'csv')
+    path.join(__dirname, 'reports', 'csv'),
+    path.join(__dirname, 'public'),
+    path.join(__dirname, 'public', 'images')
   ];
   
   for (const dir of dirs) {
@@ -69,6 +73,9 @@ async function ensureDirectoriesExist() {
 
 // Call this on server start
 ensureDirectoriesExist();
+
+// Serve static files
+app.use(express.static(path.join(__dirname, 'public')));
 
 // Health check endpoint
 app.get('/', (req, res) => {
@@ -171,9 +178,13 @@ app.get('/api/scan/:scanId', async (req, res) => {
     // Prepare reports URLs if scan is complete
     let reports = null;
     if (scanData.status === 'completed') {
+      const baseUrl = process.env.NODE_ENV === 'production' 
+        ? 'https://a11yscan.xyz' 
+        : `http://localhost:${port}`;
+      
       reports = {
-        pdf: `https://render-cpug.onrender.com/api/reports/${scanId}/pdf`,
-        csv: `https://render-cpug.onrender.com/api/reports/${scanId}/csv`
+        pdf: `${baseUrl}/api/reports/${scanId}/pdf`,
+        csv: `${baseUrl}/api/reports/${scanId}/csv`
       };
     }
     
@@ -340,6 +351,10 @@ async function updateScanData(scanId, updates) {
 // Function to send confirmation email
 async function sendConfirmationEmail(email, url, scanId) {
   try {
+    const baseUrl = process.env.NODE_ENV === 'production' 
+      ? 'https://a11yscan.xyz' 
+      : `http://localhost:${port}`;
+      
     const mailOptions = {
       from: `"A11yscan" <${process.env.EMAIL_FROM}>`,
       to: email,
@@ -347,7 +362,7 @@ async function sendConfirmationEmail(email, url, scanId) {
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
           <div style="text-align: center; margin-bottom: 20px;">
-            <img src="https://a11yscan.xyz/images/a11yscan-logo.svg" alt="A11yscan Logo" width="180" height="50" style="display: inline-block;">
+            <img src="${baseUrl}/images/a11yscan-logo.svg" alt="A11yscan Logo" width="180" height="50" style="display: inline-block;">
           </div>
           
           <h1 style="color: #4f46e5; margin-bottom: 20px;">Your Accessibility Scan Has Started</h1>
@@ -365,14 +380,14 @@ async function sendConfirmationEmail(email, url, scanId) {
           
           <p>Once the scan is finished, we'll send you another email with your detailed accessibility report.</p>
           
-          <p>In the meantime, you can check your scan status <a href="https://a11yscan.xyz/scan-status/${scanId}" style="color: #4f46e5;">here</a>.</p>
+          <p>In the meantime, you can check your scan status <a href="${baseUrl}/scan-status/${scanId}" style="color: #4f46e5;">here</a>.</p>
           
           <p>Thank you for making the web more accessible for everyone!</p>
           
           <p>Best regards,<br>The A11yscan Team</p>
           
           <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #e5e7eb; font-size: 12px; color: #6b7280; text-align: center;">
-            <p>© 2023 A11yscan. All rights reserved.</p>
+            <p>© ${new Date().getFullYear()} A11yscan. All rights reserved.</p>
             <p>If you have any questions, please contact us at <a href="mailto:hello@a11yscan.xyz" style="color: #4f46e5;">hello@a11yscan.xyz</a></p>
           </div>
         </div>
@@ -391,7 +406,11 @@ async function sendConfirmationEmail(email, url, scanId) {
 // Function to send results email
 async function sendResultsEmail(email, url, scanId, summary) {
   try {
-    const reportUrl = `https://a11yscan.xyz/reports/${scanId}`;
+    const baseUrl = process.env.NODE_ENV === 'production' 
+      ? 'https://a11yscan.xyz' 
+      : `http://localhost:${port}`;
+      
+    const reportUrl = `${baseUrl}/reports/${scanId}`;
     
     const mailOptions = {
       from: `"A11yscan" <${process.env.EMAIL_FROM}>`,
@@ -400,7 +419,7 @@ async function sendResultsEmail(email, url, scanId, summary) {
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
           <div style="text-align: center; margin-bottom: 20px;">
-            <img src="https://a11yscan.xyz/images/a11yscan-logo.svg" alt="A11yscan Logo" width="180" height="50" style="display: inline-block;">
+            <img src="${baseUrl}/images/a11yscan-logo.svg" alt="A11yscan Logo" width="180" height="50" style="display: inline-block;">
           </div>
           
           <h1 style="color: #4f46e5; margin-bottom: 20px;">Your Accessibility Report is Ready</h1>
@@ -439,14 +458,14 @@ async function sendResultsEmail(email, url, scanId, summary) {
             <li>Improve your SEO</li>
           </ul>
           
-          <p>Your free report will be available for 7 days. For more comprehensive testing and ongoing monitoring, check out our <a href="https://a11yscan.xyz/#pricing" style="color: #4f46e5;">paid plans</a>.</p>
+          <p>Your free report will be available for 7 days. For more comprehensive testing and ongoing monitoring, check out our <a href="${baseUrl}/#pricing" style="color: #4f46e5;">paid plans</a>.</p>
           
           <p>Thank you for making the web more accessible for everyone!</p>
           
           <p>Best regards,<br>The A11yscan Team</p>
           
           <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #e5e7eb; font-size: 12px; color: #6b7280; text-align: center;">
-            <p>© 2023 A11yscan. All rights reserved.</p>
+            <p>© ${new Date().getFullYear()} A11yscan. All rights reserved.</p>
             <p>If you have any questions, please contact us at <a href="mailto:hello@a11yscan.xyz" style="color: #4f46e5;">hello@a11yscan.xyz</a></p>
           </div>
         </div>
@@ -465,6 +484,10 @@ async function sendResultsEmail(email, url, scanId, summary) {
 // Function to send error email
 async function sendErrorEmail(email, url, scanId, errorMessage) {
   try {
+    const baseUrl = process.env.NODE_ENV === 'production' 
+      ? 'https://a11yscan.xyz' 
+      : `http://localhost:${port}`;
+      
     const mailOptions = {
       from: `"A11yscan" <${process.env.EMAIL_FROM}>`,
       to: email,
@@ -472,7 +495,7 @@ async function sendErrorEmail(email, url, scanId, errorMessage) {
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
           <div style="text-align: center; margin-bottom: 20px;">
-            <img src="https://a11yscan.xyz/images/a11yscan-logo.svg" alt="A11yscan Logo" width="180" height="50" style="display: inline-block;">
+            <img src="${baseUrl}/images/a11yscan-logo.svg" alt="A11yscan Logo" width="180" height="50" style="display: inline-block;">
           </div>
           
           <h1 style="color: #4f46e5; margin-bottom: 20px;">Issue with Your Accessibility Scan</h1>
@@ -502,7 +525,7 @@ async function sendErrorEmail(email, url, scanId, errorMessage) {
           <p>Please try again later or contact us if you continue experiencing issues.</p>
           
           <div style="text-align: center; margin: 30px 0;">
-            <a href="https://a11yscan.xyz/#scan" style="background-color: #4f46e5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block;">Try Again</a>
+            <a href="${baseUrl}/#scan" style="background-color: #4f46e5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block;">Try Again</a>
           </div>
           
           <p>Thank you for your understanding.</p>
@@ -510,7 +533,7 @@ async function sendErrorEmail(email, url, scanId, errorMessage) {
           <p>Best regards,<br>The A11yscan Team</p>
           
           <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #e5e7eb; font-size: 12px; color: #6b7280; text-align: center;">
-            <p>© 2023 A11yscan. All rights reserved.</p>
+            <p>© ${new Date().getFullYear()} A11yscan. All rights reserved.</p>
             <p>If you have any questions, please contact us at <a href="mailto:hello@a11yscan.xyz" style="color: #4f46e5;">hello@a11yscan.xyz</a></p>
           </div>
         </div>
@@ -524,25 +547,6 @@ async function sendErrorEmail(email, url, scanId, errorMessage) {
     console.error(`Failed to send error email for ${scanId}:`, error);
     throw error;
   }
-}
-
-// Helper function to safely parse JSON with a fallback
-function safeJsonParse(jsonString, fallback) {
-  try {
-    return jsonString ? JSON.parse(jsonString) : fallback;
-  } catch (error) {
-    return fallback;
-  }
-}
-
-// Simple function to normalize a URL for file naming
-function sanitizeUrlForFilename(url) {
-  return url
-    .replace(/^https?:\/\//, '')
-    .replace(/[^a-z0-9]/gi, '-')
-    .replace(/-+/g, '-')
-    .replace(/^-|-$/g, '')
-    .toLowerCase();
 }
 
 // Function to initiate a free scan (limited to 5 pages)
@@ -565,7 +569,13 @@ async function initiateFreeScan(scanId, url, email) {
     });
     
     // Generate PDF and CSV reports
-    await generateReports(scanId, url, result);
+    await generateReports(scanId, url, result.results, {
+      pagesScanned: result.pagesScanned,
+      totalIssues: result.issues.total,
+      criticalIssues: result.issues.critical,
+      warningIssues: result.issues.warning,
+      infoIssues: result.issues.info
+    });
     
     // Send results email
     await sendResultsEmail(email, url, scanId, {
@@ -772,11 +782,49 @@ async function runAccessibilityTests(page) {
 
 // Function to extract links from a page
 async function extractLinks(page, baseUrl) {
-  const baseHostname = new URL(baseUrl).hostname;
-  
-  const links = await page.evaluate((baseHostname) => {
-    return Array.from(document.querySelectorAll('a[href]'))
-      .map(a => {
-        try {
-          const href = a.href;
-          if (!href) return
+  try {
+    // Parse the base URL
+    const baseUrlObj = new URL(baseUrl);
+    const baseHostname = baseUrlObj.hostname;
+    const baseOrigin = baseUrlObj.origin;
+    
+    // Extract links via browser context
+    const links = await page.evaluate((baseHostname, baseOrigin) => {
+      // Get all links on the page
+      const allLinks = Array.from(document.querySelectorAll('a[href]'))
+        .map(a => {
+          try {
+            // Get the full href
+            const href = a.href;
+            if (!href) return null;
+            
+            // Parse the URL
+            const url = new URL(href);
+            
+            // Only include links to the same hostname
+            if (url.hostname !== baseHostname) return null;
+            
+            // Skip hash links (same page anchors)
+            if (url.pathname === window.location.pathname && url.hash) return null;
+            
+            // Skip mailto, tel, etc.
+            if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
+            
+            // Return the normalized URL (without hash)
+            return url.origin + url.pathname + url.search;
+          } catch (e) {
+            return null;
+          }
+        })
+        .filter(Boolean); // Remove nulls
+      
+      // Remove duplicates
+      return [...new Set(allLinks)];
+    }, baseHostname, baseOrigin);
+    
+    return links;
+  } catch (error) {
+    console.error('Error extracting links:', error);
+    return [];
+  }
+}
