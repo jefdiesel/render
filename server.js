@@ -267,38 +267,6 @@ app.get('/api/scan/:scanId/details', async (req, res) => {
     res.status(500).json({ error: 'An error occurred while getting detailed scan results.' });
   }
 });
-// Function to launch browser with error handling
-async function launchBrowser() {
-  try {
-    const browser = await puppeteer.launch({
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-accelerated-2d-canvas',
-        '--no-first-run',
-        '--no-zygote',
-        '--single-process',
-        '--disable-gpu'
-      ],
-      headless: 'new', // Use the new headless mode
-      defaultViewport: null, // Allows setting viewport dynamically
-      executablePath: process.env.CHROMIUM_PATH || puppeteer.executablePath()
-    });
-    return browser;
-  } catch (error) {
-    console.error('Failed to launch browser:', error);
-    // Log detailed error information
-    console.error('Error details:', {
-      message: error.message,
-      stack: error.stack,
-      chromiumPath: process.env.CHROMIUM_PATH,
-      defaultExecutablePath: puppeteer.executablePath()
-    });
-    
-    throw error;
-  }
-}
 
 // Serve PDF report
 app.get('/api/reports/:scanId/pdf', async (req, res) => {
@@ -418,6 +386,38 @@ async function updateScanData(scanId, updates) {
     return true;
   } catch (error) {
     console.error(`Error updating scan data for ${scanId}:`, error);
+    throw error;
+  }
+}
+
+async function launchBrowser() {
+  try {
+    const browser = await puppeteer.launch({
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-accelerated-2d-canvas',
+        '--no-first-run',
+        '--no-zygote',
+        '--single-process',
+        '--disable-gpu'
+      ],
+      headless: 'new', // Use the new headless mode
+      defaultViewport: null, // Allows setting viewport dynamically
+      executablePath: process.env.CHROMIUM_PATH || puppeteer.executablePath()
+    });
+    return browser;
+  } catch (error) {
+    console.error('Failed to launch browser:', error);
+    // Log detailed error information
+    console.error('Error details:', {
+      message: error.message,
+      stack: error.stack,
+      chromiumPath: process.env.CHROMIUM_PATH,
+      defaultExecutablePath: puppeteer.executablePath()
+    });
+    
     throw error;
   }
 }
