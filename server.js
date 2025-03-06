@@ -1,6 +1,6 @@
 const express = require('express');
 const path = require('path');
-const fs = require('fs').promises;
+const fs = require('fs');
 const nodemailer = require('nodemailer');
 const bodyParser = require('body-parser');
 const { v4: uuidv4 } = require('uuid');
