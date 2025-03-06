@@ -358,73 +358,28 @@ async function updateScanData(scanId, updates) {
   }
 }
 // this is the section
-
 async function launchBrowser() {
   try {
-    console.log('Attempting to connect to browserless service');
+    console.log('Launching browser with Puppeteer bundled Chrome');
     
-    // Free browserless service - we use browserless.io's free tier
-    // You can sign up for a free account at browserless.io to get your own token
-    const browserWSEndpoint = process.env.BROWSERLESS_WSS || 'wss://chrome.browserless.io?token=free';
-    
-    // Connect to the remote browser
-    const browser = await puppeteer.connect({
-      browserWSEndpoint,
+    const browser = await puppeteer.launch({
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-accelerated-2d-canvas',
+        '--disable-gpu',
+        '--disable-features=IsolateOrigins,site-per-process'
+      ],
+      headless: true,
       ignoreHTTPSErrors: true
     });
     
-    console.log('Successfully connected to browserless service');
+    console.log('Browser launched successfully with bundled Chrome');
     return browser;
   } catch (error) {
-    console.error('Error connecting to browserless service:', error);
-    
-    // As a fallback, try to launch locally if available
-    try {
-      console.log('Attempting local browser launch as fallback');
-      
-      // Try common Chrome locations
-      const possiblePaths = [
-        '/usr/bin/google-chrome',
-        '/usr/bin/chromium-browser',
-        '/usr/bin/chromium',
-        process.env.CHROME_PATH || ''
-      ].filter(Boolean);
-      
-      // Find the first browser that exists
-      let executablePath = null;
-      for (const path of possiblePaths) {
-        try {
-          await fs.access(path);
-          executablePath = path;
-          console.log(`Found Chrome at ${executablePath}`);
-          break;
-        } catch (e) {
-          // Path doesn't exist, try next one
-        }
-      }
-      
-      if (!executablePath) {
-        throw new Error('No local Chrome installation found');
-      }
-      
-      // Launch browser locally
-      const browser = await puppeteer.launch({
-        executablePath,
-        args: [
-          '--no-sandbox',
-          '--disable-setuid-sandbox',
-          '--disable-dev-shm-usage',
-          '--disable-gpu'
-        ],
-        headless: true
-      });
-      
-      console.log('Local browser launched successfully');
-      return browser;
-    } catch (fallbackError) {
-      console.error('Both remote and local browser launch failed:', fallbackError);
-      throw error; // Throw the original error
-    }
+    console.error('Failed to launch browser:', error);
+    throw error;
   }
 }
 
