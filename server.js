@@ -815,10 +815,14 @@ const browser = await puppeteer.launch({
     '--disable-gpu'
     ],
 
-    // Use Render’s preinstalled Chromium if in production
-executablePath: process.env.CHROMIUM_PATH || puppeteer.executablePath(), 
+// Use Render's preinstalled Chromium if in production
+  executablePath: process.env.CHROMIUM_PATH || puppeteer.executablePath(),
+  
+  // Add these Render-specific options
+  headless: 'new', // Use the new headless mode
+  defaultViewport: null // Allows setting viewport dynamically
+});
 
-});  
   try {
     // Set up results structure
     const results = {
