@@ -1,12 +1,7 @@
 services:
   - type: web
-    name: a11yscan
-    env: node
-    buildCommand: |
-      export PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true && npm install
-    startCommand: node server.js
-    envVars:
-      - key: NODE_ENV
-        value: production
-      - key: PUPPETEER_SKIP_CHROMIUM_DOWNLOAD
-        value: false
+    name: your-service-name
+    runtime: docker
+    repo: https://github.com/jefdiesel/render
+    branch: main
+    dockerfilePath: ./Dockerfile
