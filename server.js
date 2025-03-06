@@ -358,14 +358,17 @@ async function updateScanData(scanId, updates) {
   }
 }
 // this is the section
+
 async function launchBrowser() {
   try {
     console.log('Launching browser with Puppeteer bundled Chromium');
     
-    // Always use Puppeteer's bundled Chromium
-    const executablePath = puppeteer.executablePath();
-    console.log(`Using browser at path: ${executablePath}`);
+    // Get the path to the bundled executable
+    // Note: We need to use a specific approach here for Render compatibility
+    const chromePath = puppeteer.executablePath();
+    console.log(`Puppeteer executable path: ${chromePath}`);
     
+    // Launch the browser with explicit options
     const browser = await puppeteer.launch({
       args: [
         '--no-sandbox',
@@ -377,9 +380,9 @@ async function launchBrowser() {
         '--single-process',
         '--disable-gpu'
       ],
-      headless: 'new',
-      defaultViewport: null,
-      executablePath
+      headless: true, // Use plain 'true' instead of 'new'
+      ignoreHTTPSErrors: true,
+      dumpio: true // Log browser process stdout and stderr
     });
     
     console.log('Browser launched successfully');
@@ -387,7 +390,32 @@ async function launchBrowser() {
   } catch (error) {
     console.error('Failed to launch browser:', error);
     console.error('Full error details:', error);
-    throw error;
+    
+    // Try again with more detailed error logging
+    try {
+      console.log('Attempting alternative launch method...');
+      
+      // Log the browsers that Puppeteer knows about
+      try {
+        const revInfo = await puppeteer.revisionInfo();
+        console.log('Revision info:', revInfo);
+      } catch (e) {
+        console.error('Could not get revision info:', e);
+      }
+      
+      // Try a more direct launch approach
+      const browser = await puppeteer.launch({
+        args: ['--no-sandbox'],
+        headless: true,
+        ignoreHTTPSErrors: true
+      });
+      
+      console.log('Alternative launch succeeded');
+      return browser;
+    } catch (retryError) {
+      console.error('Alternative launch also failed:', retryError);
+      throw error; // Throw the original error
+    }
   }
 }
 
