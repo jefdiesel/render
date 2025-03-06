@@ -356,13 +356,13 @@ async function updateScanData(scanId, updates) {
     throw error;
   }
 }
-
+// this is the section
 async function launchBrowser() {
   try {
     const isProd = process.env.NODE_ENV === 'production';
     
     // Use the correct Chrome path based on environment
-    const executablePath = isProd 
+    let executablePath = isProd 
       ? process.env.CHROME_PATH || '/usr/bin/google-chrome-stable'
       : puppeteer.executablePath();
     
