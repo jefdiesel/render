@@ -361,22 +361,32 @@ async function launchBrowser() {
   try {
     const isProd = process.env.NODE_ENV === 'production';
     
-    // Use the correct Chrome path based on environment
+    // Use the correct Chrome path
     let executablePath = isProd 
       ? process.env.CHROME_PATH || '/usr/bin/google-chrome-stable'
       : puppeteer.executablePath();
     
     console.log(`Using browser at path: ${executablePath}`);
     
-    // Check if the executable exists before launching
+    // Try to check if Chrome exists
     try {
-      await fs.access(executablePath);
-      console.log(`Chrome executable exists at ${executablePath}`);
+      const fileStats = await fs.stat(executablePath);
+      console.log(`Chrome executable exists at ${executablePath}, stats:`, fileStats);
     } catch (error) {
-      console.error(`Chrome executable not found at ${executablePath}`);
+      console.error(`Chrome executable not found at ${executablePath}, error:`, error);
       console.error('Will attempt to use bundled Chromium as fallback');
-      // Fall back to puppeteer's bundled browser if configured path doesn't exist
       executablePath = puppeteer.executablePath();
+      console.log(`Fallback to Puppeteer's bundled Chrome at: ${executablePath}`);
+    }
+    
+    // Log the directory contents where Chrome should be
+    try {
+      const dirPath = '/usr/bin';
+      const files = await fs.readdir(dirPath);
+      console.log(`Files in ${dirPath} that match 'chrome':`, 
+        files.filter(file => file.includes('chrome')));
+    } catch (err) {
+      console.error('Could not list directory contents:', err);
     }
     
     const browser = await puppeteer.launch({
@@ -412,7 +422,6 @@ async function launchBrowser() {
     throw error;
   }
 }
-
 // Function to send confirmation email
 async function sendConfirmationEmail(email, url, scanId) {
   try {
