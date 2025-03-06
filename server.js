@@ -360,35 +360,11 @@ async function updateScanData(scanId, updates) {
 // this is the section
 async function launchBrowser() {
   try {
-    const isProd = process.env.NODE_ENV === 'production';
+    console.log('Launching browser with Puppeteer bundled Chromium');
     
-    // Use the correct Chrome path
-    let executablePath = isProd 
-      ? process.env.CHROME_PATH || '/usr/bin/google-chrome-stable'
-      : puppeteer.executablePath();
-    
+    // Always use Puppeteer's bundled Chromium
+    const executablePath = puppeteer.executablePath();
     console.log(`Using browser at path: ${executablePath}`);
-    
-    // Try to check if Chrome exists
-    try {
-      const fileStats = await fs.stat(executablePath);
-      console.log(`Chrome executable exists at ${executablePath}, stats:`, fileStats);
-    } catch (error) {
-      console.error(`Chrome executable not found at ${executablePath}, error:`, error);
-      console.error('Will attempt to use bundled Chromium as fallback');
-      executablePath = puppeteer.executablePath();
-      console.log(`Fallback to Puppeteer's bundled Chrome at: ${executablePath}`);
-    }
-    
-    // Log the directory contents where Chrome should be
-    try {
-      const dirPath = '/usr/bin';
-      const files = await fs.readdir(dirPath);
-      console.log(`Files in ${dirPath} that match 'chrome':`, 
-        files.filter(file => file.includes('chrome')));
-    } catch (err) {
-      console.error('Could not list directory contents:', err);
-    }
     
     const browser = await puppeteer.launch({
       args: [
@@ -410,19 +386,11 @@ async function launchBrowser() {
     return browser;
   } catch (error) {
     console.error('Failed to launch browser:', error);
-    console.error('Error details:', {
-      message: error.message,
-      stack: error.stack,
-      puppeteerPath: puppeteer.executablePath(),
-      env: {
-        CHROME_PATH: process.env.CHROME_PATH,
-        NODE_ENV: process.env.NODE_ENV
-      }
-    });
-    
+    console.error('Full error details:', error);
     throw error;
   }
 }
+
 // Function to send confirmation email
 async function sendConfirmationEmail(email, url, scanId) {
   try {

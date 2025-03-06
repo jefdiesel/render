@@ -3,12 +3,11 @@
   "version": "1.0.0",
   "description": "Accessibility scanner for websites using axe-core",
   "main": "server.js",
-  "scripts": {
-    "start": "node server.js",
-    "dev": "nodemon server.js",
-    "postinstall": "node node_modules/puppeteer/install.js",
-    "build": "echo 'Build completed'"
-  },
+"scripts": {
+  "start": "node server.js",
+  "dev": "nodemon server.js",
+  "postinstall": "node node_modules/puppeteer/install.js"
+},
   "dependencies": {
     "axe-core": "^4.7.0",
     "body-parser": "^1.20.2",
