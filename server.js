@@ -6,7 +6,7 @@ const bodyParser = require('body-parser');
 const { v4: uuidv4 } = require('uuid');
 const cors = require('cors');
 const dotenv = require('dotenv');
-const puppeteer = require('puppeteer-core');
+const puppeteer = require('puppeteer');
 const PDFDocument = require('pdfkit');
 const { createObjectCsvWriter } = require('csv-writer');
 const rateLimit = require('express-rate-limit');
@@ -367,12 +367,9 @@ async function launchBrowser() {
         '--no-sandbox',
         '--disable-setuid-sandbox',
         '--disable-dev-shm-usage',
-        '--disable-accelerated-2d-canvas',
         '--disable-gpu',
-        '--disable-features=IsolateOrigins,site-per-process'
       ],
       headless: true,
-      ignoreHTTPSErrors: true
     });
     
     console.log('Browser launched successfully with bundled Chrome');
