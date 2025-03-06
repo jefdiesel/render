@@ -2,10 +2,11 @@ services:
   - type: web
     name: a11yscan
     env: node
-    buildCommand: npm install
+    buildCommand: |
+      export PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true && npm install
     startCommand: node server.js
     envVars:
       - key: NODE_ENV
         value: production
-      - key: BROWSERLESS_WSS
-        value: wss://chrome.browserless.io?token=free
+      - key: PUPPETEER_SKIP_CHROMIUM_DOWNLOAD
+        value: false
