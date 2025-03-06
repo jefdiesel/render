@@ -1,0 +1,9 @@
+#!/bin/bash
+# Install Chromium
+apt-get update && apt-get install -y chromium fonts-freefont-ttf
+
+# Set environment variable for Puppeteer
+export PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
+
+# Install dependencies
+npm install

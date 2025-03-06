@@ -360,6 +360,14 @@ async function updateScanData(scanId, updates) {
 
 async function launchBrowser() {
   try {
+    // For Render's environment specifically
+    const isProd = process.env.NODE_ENV === 'production';
+    const executablePath = isProd 
+      ? process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium-browser'  // Render uses Chromium
+      : puppeteer.executablePath(); // Local dev uses the version that comes with Puppeteer
+    
+    console.log(`Using browser at path: ${executablePath}`);
+    
     const browser = await puppeteer.launch({
       args: [
         '--no-sandbox',
@@ -371,19 +379,23 @@ async function launchBrowser() {
         '--single-process',
         '--disable-gpu'
       ],
-      headless: 'new', // Use the new headless mode
-      defaultViewport: null, // Allows setting viewport dynamically
-      executablePath: process.env.CHROMIUM_PATH || puppeteer.executablePath()
+      headless: 'new',
+      defaultViewport: null,
+      executablePath
     });
+    
+    console.log('Browser launched successfully');
     return browser;
   } catch (error) {
     console.error('Failed to launch browser:', error);
-    // Log detailed error information
     console.error('Error details:', {
       message: error.message,
       stack: error.stack,
-      chromiumPath: process.env.CHROMIUM_PATH,
-      defaultExecutablePath: puppeteer.executablePath()
+      puppeteerPath: puppeteer.executablePath(),
+      env: {
+        PUPPETEER_EXECUTABLE_PATH: process.env.PUPPETEER_EXECUTABLE_PATH,
+        NODE_ENV: process.env.NODE_ENV
+      }
     });
     
     throw error;
