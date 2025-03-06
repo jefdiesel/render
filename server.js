@@ -817,6 +817,12 @@ async function extractLinks(page, baseUrl) {
           }
         })
         .filter(Boolean); // Remove nulls
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`Server running at http://0.0.0.0:${PORT}`);
+  // ...
+});
       
       // Remove duplicates
       return [...new Set(allLinks)];
