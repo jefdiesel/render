@@ -15,7 +15,7 @@ dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-app.set('trust proxy', true);
+app.set('trust proxy', 'loopback, linklocal, uniquelocal');
 
 // Middleware
 app.use(bodyParser.json());
@@ -31,13 +31,12 @@ app.use(cors({
 }));
 
 // Rate limiting
-const rateLimit = require('express-rate-limit');
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 5, // limit each IP to 5 requests per windowMs
-  message: { error: 'Too many requests, please try again later.' }
+  message: { error: 'Too many requests, please try again later.' },
+  validate: { trustProxy: false }  // This disables the validation warning
 });
-
 // Apply rate limiting to the free scan endpoint
 app.use('/api/free-scan', limiter);
 
@@ -360,13 +359,25 @@ async function updateScanData(scanId, updates) {
 
 async function launchBrowser() {
   try {
-    // For Render's environment specifically
     const isProd = process.env.NODE_ENV === 'production';
+    
+    // Use the correct Chrome path based on environment
     const executablePath = isProd 
-      ? process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium-browser'  // Render uses Chromium
-      : puppeteer.executablePath(); // Local dev uses the version that comes with Puppeteer
+      ? process.env.CHROME_PATH || '/usr/bin/google-chrome-stable'
+      : puppeteer.executablePath();
     
     console.log(`Using browser at path: ${executablePath}`);
+    
+    // Check if the executable exists before launching
+    try {
+      await fs.access(executablePath);
+      console.log(`Chrome executable exists at ${executablePath}`);
+    } catch (error) {
+      console.error(`Chrome executable not found at ${executablePath}`);
+      console.error('Will attempt to use bundled Chromium as fallback');
+      // Fall back to puppeteer's bundled browser if configured path doesn't exist
+      executablePath = puppeteer.executablePath();
+    }
     
     const browser = await puppeteer.launch({
       args: [
@@ -393,7 +404,7 @@ async function launchBrowser() {
       stack: error.stack,
       puppeteerPath: puppeteer.executablePath(),
       env: {
-        PUPPETEER_EXECUTABLE_PATH: process.env.PUPPETEER_EXECUTABLE_PATH,
+        CHROME_PATH: process.env.CHROME_PATH,
         NODE_ENV: process.env.NODE_ENV
       }
     });

@@ -1,9 +1,18 @@
-#!/bin/bash
-# Install Chromium
-apt-get update && apt-get install -y chromium fonts-freefont-ttf
-
-# Set environment variable for Puppeteer
-export PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
-
-# Install dependencies
-npm install
+services:
+  - type: web
+    name: a11yscan
+    env: node
+    buildCommand: |
+      apt-get update
+      apt-get install -y wget gnupg
+      wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key add -
+      echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google.list
+      apt-get update
+      apt-get install -y google-chrome-stable fonts-freefont-ttf
+      npm install
+    startCommand: node server.js
+    envVars:
+      - key: CHROME_PATH
+        value: /usr/bin/google-chrome-stable
+      - key: NODE_ENV
+        value: production
