@@ -768,7 +768,6 @@ async function initiateFreeScan(scanId, url, email, options = {}) {
       );
     }
   }
-}
 
 // Function to calculate accessibility score
 function calculateAccessibilityScore(result) {
@@ -817,11 +816,11 @@ const browser = await puppeteer.launch({
     ],
     // Use Render’s preinstalled Chromium if in production
 #    executablePath: process.env.NODE_ENV === 'production' 
- #     ? '/usr/bin/chromium-browser' // Render’s default Chromium path
-  #    : puppeteer.executablePath(),
+#     ? '/usr/bin/chromium-browser' // Render’s default Chromium path
+#    : puppeteer.executablePath(),
 #    headless: true
 executablePath: process.env.CHROMIUM_PATH || puppeteer.executablePath(), 
- });  
+});  
   try {
     // Set up results structure
     const results = {
