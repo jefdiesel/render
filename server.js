@@ -14,7 +14,7 @@ const { createObjectCsvWriter } = require('csv-writer');
 dotenv.config();
 
 const app = express();
-const port = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3000;
 
 // Middleware
 app.use(bodyParser.json());
@@ -55,11 +55,11 @@ const transporter = nodemailer.createTransport({
 async function ensureDirectoriesExist() {
   const dirs = [
     path.join(__dirname, 'data'),
+    path.join(__dirname, 'public'),
+    path.join(__dirname, 'public', 'images'),
     path.join(__dirname, 'reports'),
     path.join(__dirname, 'reports', 'pdf'),
-    path.join(__dirname, 'reports', 'csv'),
-    path.join(__dirname, 'public'),
-    path.join(__dirname, 'public', 'images')
+    path.join(__dirname, 'reports', 'csv')
   ];
   
   for (const dir of dirs) {
@@ -70,9 +70,6 @@ async function ensureDirectoriesExist() {
     }
   }
 }
-
-// Call this on server start
-ensureDirectoriesExist();
 
 // Serve static files
 app.use(express.static(path.join(__dirname, 'public')));
@@ -89,7 +86,7 @@ app.get('/', (req, res) => {
 // Handle free scan submissions
 app.post('/api/free-scan', async (req, res) => {
   try {
-    const { url, email, consent } = req.body;
+    const { url, email, consent, sendCopyToAdmin, adminEmail } = req.body;
     
     // Validate request
     if (!url || !email) {
@@ -112,14 +109,20 @@ app.post('/api/free-scan', async (req, res) => {
     // Generate unique scan ID
     const scanId = uuidv4();
     
-    // Store scan request
-    await storeScanRequest(scanId, url, email);
+    // Store scan request with admin details
+    await storeScanRequest(scanId, url, email, {
+      sendCopyToAdmin: !!sendCopyToAdmin,
+      adminEmail: adminEmail || 'hello@a11yscan.xyz'
+    });
     
     // Send confirmation email
     await sendConfirmationEmail(email, url, scanId);
     
     // Initiate scan process in background
-    initiateFreeScan(scanId, url, email).catch(error => {
+    initiateFreeScan(scanId, url, email, {
+      sendCopyToAdmin: !!sendCopyToAdmin,
+      adminEmail: adminEmail || 'hello@a11yscan.xyz'
+    }).catch(error => {
       console.error(`Error starting scan ${scanId}:`, error);
     });
     
@@ -179,8 +182,8 @@ app.get('/api/scan/:scanId', async (req, res) => {
     let reports = null;
     if (scanData.status === 'completed') {
       const baseUrl = process.env.NODE_ENV === 'production' 
-        ? 'https://a11yscan.xyz' 
-        : `http://localhost:${port}`;
+        ? 'https://render-cpug.onrender.com' 
+        : `http://localhost:${PORT}`;
       
       reports = {
         pdf: `${baseUrl}/api/reports/${scanId}/pdf`,
@@ -279,7 +282,7 @@ app.get('/api/reports/:scanId/csv', async (req, res) => {
 });
 
 // Function to store scan request in database or file
-async function storeScanRequest(scanId, url, email) {
+async function storeScanRequest(scanId, url, email, options = {}) {
   // This is a simplified version that stores data in a JSON file
   const scanData = {
     scanId,
@@ -291,7 +294,13 @@ async function storeScanRequest(scanId, url, email) {
     pagesScanned: 0,
     pagesFound: 0,
     issues: null,
-    results: []
+    results: [],
+    // Store admin notification preferences
+    sendCopyToAdmin: options.sendCopyToAdmin || false,
+    adminEmail: options.adminEmail || null,
+    // Track if this was escalated to a deep scan
+    deepScanTriggered: false,
+    deepScanThreshold: 90, // Configurable threshold for triggering deep scans
   };
   
   try {
@@ -353,7 +362,7 @@ async function sendConfirmationEmail(email, url, scanId) {
   try {
     const baseUrl = process.env.NODE_ENV === 'production' 
       ? 'https://a11yscan.xyz' 
-      : `http://localhost:${port}`;
+      : `http://localhost:${PORT}`;
       
     const mailOptions = {
       from: `"A11yscan" <${process.env.EMAIL_FROM}>`,
@@ -380,7 +389,7 @@ async function sendConfirmationEmail(email, url, scanId) {
           
           <p>Once the scan is finished, we'll send you another email with your detailed accessibility report.</p>
           
-          <p>In the meantime, you can check your scan status <a href="${baseUrl}/scan-status/${scanId}" style="color: #4f46e5;">here</a>.</p>
+          <p>In the meantime, you can check your scan status <a href="${baseUrl}/scan-status.html?id=${scanId}" style="color: #4f46e5;">here</a>.</p>
           
           <p>Thank you for making the web more accessible for everyone!</p>
           
@@ -408,7 +417,7 @@ async function sendResultsEmail(email, url, scanId, summary) {
   try {
     const baseUrl = process.env.NODE_ENV === 'production' 
       ? 'https://a11yscan.xyz' 
-      : `http://localhost:${port}`;
+      : `http://localhost:${PORT}`;
       
     const reportUrl = `${baseUrl}/reports/${scanId}`;
     
@@ -431,6 +440,7 @@ async function sendResultsEmail(email, url, scanId, summary) {
           <div style="background-color: #f3f4f6; padding: 15px; border-radius: 5px; margin: 20px 0;">
             <p style="margin: 0;"><strong>Website URL:</strong> ${url}</p>
             <p style="margin: 10px 0 0;"><strong>Scan ID:</strong> ${scanId}</p>
+            ${summary.accessibilityScore ? `<p style="margin: 10px 0 0;"><strong>Accessibility Score:</strong> ${summary.accessibilityScore}/100</p>` : ''}
           </div>
           
           <h2 style="color: #4f46e5; margin: 25px 0 15px;">Summary of Findings</h2>
@@ -481,12 +491,131 @@ async function sendResultsEmail(email, url, scanId, summary) {
   }
 }
 
+// Function to send admin results email
+async function sendAdminResultsEmail(adminEmail, url, userEmail, scanId, summary) {
+  try {
+    const baseUrl = process.env.NODE_ENV === 'production' 
+      ? 'https://a11yscan.xyz' 
+      : `http://localhost:${PORT}`;
+      
+    const reportUrl = `${baseUrl}/reports/${scanId}`;
+    
+    const mailOptions = {
+      from: `"A11yscan" <${process.env.EMAIL_FROM}>`,
+      to: adminEmail,
+      subject: `[ADMIN] New Scan Results for ${url}`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <div style="text-align: center; margin-bottom: 20px;">
+            <img src="${baseUrl}/images/a11yscan-logo.svg" alt="A11yscan Logo" width="180" height="50" style="display: inline-block;">
+          </div>
+          
+          <h1 style="color: #4f46e5; margin-bottom: 20px;">New Accessibility Scan Completed</h1>
+          
+          <p>Hello Admin,</p>
+          
+          <p>A new accessibility scan has been completed for a user.</p>
+          
+          <div style="background-color: #f3f4f6; padding: 15px; border-radius: 5px; margin: 20px 0;">
+            <p style="margin: 0;"><strong>Website URL:</strong> ${url}</p>
+            <p style="margin: 10px 0 0;"><strong>User Email:</strong> ${userEmail}</p>
+            <p style="margin: 10px 0 0;"><strong>Scan ID:</strong> ${scanId}</p>
+            <p style="margin: 10px 0 0;"><strong>Accessibility Score:</strong> ${summary.accessibilityScore}/100</p>
+          </div>
+          
+          <h2 style="color: #4f46e5; margin: 25px 0 15px;">Summary of Findings</h2>
+          
+          <div style="margin-bottom: 20px;">
+            <p><strong>Pages Scanned:</strong> ${summary.pagesScanned}</p>
+            <p><strong>Total Issues Found:</strong> ${summary.totalIssues}</p>
+            <ul>
+              <li><strong style="color: #ef4444;">Critical Issues:</strong> ${summary.criticalIssues}</li>
+              <li><strong style="color: #f59e0b;">Warning Issues:</strong> ${summary.warningIssues}</li>
+              <li><strong style="color: #3b82f6;">Info Issues:</strong> ${summary.infoIssues}</li>
+            </ul>
+          </div>
+          
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="${reportUrl}" style="background-color: #4f46e5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block;">View Full Report</a>
+          </div>
+          
+          <p>Best regards,<br>The A11yscan System</p>
+          
+          <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #e5e7eb; font-size: 12px; color: #6b7280; text-align: center;">
+            <p>© ${new Date().getFullYear()} A11yscan. All rights reserved.</p>
+          </div>
+        </div>
+      `
+    };
+    
+    await transporter.sendMail(mailOptions);
+    console.log(`Admin results email sent to ${adminEmail} for scan ${scanId}`);
+    return true;
+  } catch (error) {
+    console.error(`Error sending admin results email for ${scanId}:`, error);
+    throw error;
+  }
+}
+
+// Function to send deep scan notification
+async function sendDeepScanNotification(adminEmail, url, scanId, score) {
+  try {
+    const baseUrl = process.env.NODE_ENV === 'production' 
+      ? 'https://a11yscan.xyz' 
+      : `http://localhost:${PORT}`;
+      
+    const mailOptions = {
+      from: `"A11yscan" <${process.env.EMAIL_FROM}>`,
+      to: adminEmail,
+      subject: `[ALERT] High Scoring Site (${score}/100) - Deep Scan Candidate`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <div style="text-align: center; margin-bottom: 20px;">
+            <img src="${baseUrl}/images/a11yscan-logo.svg" alt="A11yscan Logo" width="180" height="50" style="display: inline-block;">
+          </div>
+          
+          <h1 style="color: #4f46e5; margin-bottom: 20px;">High Scoring Website Detected</h1>
+          
+          <p>Hello,</p>
+          
+          <p>A website has scored <strong>${score}/100</strong> on our accessibility scan, making it a good candidate for a comprehensive deep scan.</p>
+          
+          <div style="background-color: #f3f4f6; padding: 15px; border-radius: 5px; margin: 20px 0;">
+            <p style="margin: 0;"><strong>Website URL:</strong> ${url}</p>
+            <p style="margin: 10px 0 0;"><strong>Scan ID:</strong> ${scanId}</p>
+            <p style="margin: 10px 0 0;"><strong>Score:</strong> ${score}/100</p>
+          </div>
+          
+          <p>This site may be a good prospect for showcasing the benefits of our premium services.</p>
+          
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="${baseUrl}/reports/${scanId}" style="background-color: #4f46e5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block;">View Scan Report</a>
+          </div>
+          
+          <p>Best regards,<br>The A11yscan System</p>
+          
+          <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #e5e7eb; font-size: 12px; color: #6b7280; text-align: center;">
+            <p>© ${new Date().getFullYear()} A11yscan. All rights reserved.</p>
+          </div>
+        </div>
+      `
+    };
+    
+    await transporter.sendMail(mailOptions);
+    console.log(`Deep scan notification sent to ${adminEmail} for ${url} (Score: ${score})`);
+    return true;
+  } catch (error) {
+    console.error(`Error sending deep scan notification for ${url}:`, error);
+    throw error;
+  }
+}
+
 // Function to send error email
 async function sendErrorEmail(email, url, scanId, errorMessage) {
   try {
     const baseUrl = process.env.NODE_ENV === 'production' 
       ? 'https://a11yscan.xyz' 
-      : `http://localhost:${port}`;
+      : `http://localhost:${PORT}`;
       
     const mailOptions = {
       from: `"A11yscan" <${process.env.EMAIL_FROM}>`,
@@ -534,7 +663,9 @@ async function sendErrorEmail(email, url, scanId, errorMessage) {
           
           <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #e5e7eb; font-size: 12px; color: #6b7280; text-align: center;">
             <p>© ${new Date().getFullYear()} A11yscan. All rights reserved.</p>
-            <p>If you have any questions, please contact us at <a href="mailto:hello@a11yscan.xyz" style="color: #4f46e5;">hello@a11yscan.xyz</a></p>
+            <p>If you have any questions, please contact us at <a href="mailto:hello@a11yscan.xyz" style="color: #4f46e5;">hello@a11yscan.xyz
+
+    <p>If you have any questions, please contact us at <a href="mailto:hello@a11yscan.xyz" style="color: #4f46e5;">hello@a11yscan.xyz</a></p>
           </div>
         </div>
       `
@@ -550,13 +681,16 @@ async function sendErrorEmail(email, url, scanId, errorMessage) {
 }
 
 // Function to initiate a free scan (limited to 5 pages)
-async function initiateFreeScan(scanId, url, email) {
+async function initiateFreeScan(scanId, url, email, options = {}) {
   try {
     // Update scan status to running
     await updateScanData(scanId, { status: 'running' });
     
     // Start the actual scanner
     const result = await performScan(url, scanId, 5);
+    
+    // Calculate accessibility score (simple example)
+    const accessibilityScore = calculateAccessibilityScore(result);
     
     // Update scan status and data
     await updateScanData(scanId, {
@@ -565,7 +699,8 @@ async function initiateFreeScan(scanId, url, email) {
       pagesScanned: result.pagesScanned,
       pagesFound: result.pagesFound,
       issues: result.issues,
-      results: result.results
+      results: result.results,
+      accessibilityScore
     });
     
     // Generate PDF and CSV reports
@@ -574,17 +709,46 @@ async function initiateFreeScan(scanId, url, email) {
       totalIssues: result.issues.total,
       criticalIssues: result.issues.critical,
       warningIssues: result.issues.warning,
-      infoIssues: result.issues.info
+      infoIssues: result.issues.info,
+      accessibilityScore
     });
     
-    // Send results email
+    // Send results email to the user
     await sendResultsEmail(email, url, scanId, {
       pagesScanned: result.pagesScanned,
       totalIssues: result.issues.total,
       criticalIssues: result.issues.critical,
       warningIssues: result.issues.warning,
-      infoIssues: result.issues.info
+      infoIssues: result.issues.info,
+      accessibilityScore
     });
+    
+    // Send copy to admin if requested
+    if (options.sendCopyToAdmin && options.adminEmail) {
+      await sendAdminResultsEmail(options.adminEmail, url, email, scanId, {
+        pagesScanned: result.pagesScanned,
+        totalIssues: result.issues.total,
+        criticalIssues: result.issues.critical,
+        warningIssues: result.issues.warning,
+        infoIssues: result.issues.info,
+        accessibilityScore
+      });
+    }
+    
+    // Check if site qualifies for a deep scan
+    const scanData = await getScanData(scanId);
+    const deepScanThreshold = scanData.deepScanThreshold || 90;
+    
+    if (accessibilityScore >= deepScanThreshold) {
+      // Update scan to indicate deep scan is triggered
+      await updateScanData(scanId, { deepScanTriggered: true });
+      
+      // TODO: Here you would trigger a more comprehensive scan
+      console.log(`Site qualifies for deep scan (score: ${accessibilityScore}). Triggering full site scan for ${url}`);
+      
+      // Send notification about deep scan qualification
+      await sendDeepScanNotification(options.adminEmail || 'hello@a11yscan.xyz', url, scanId, accessibilityScore);
+    }
     
   } catch (error) {
     console.error(`Error in scan ${scanId}:`, error);
@@ -594,7 +758,46 @@ async function initiateFreeScan(scanId, url, email) {
     
     // Send error notification email
     await sendErrorEmail(email, url, scanId, error.message || 'An unexpected error occurred during the scan.');
+    
+    // Also notify admin about the error
+    if (options.sendCopyToAdmin && options.adminEmail) {
+      await sendErrorEmail(
+        options.adminEmail, 
+        url, 
+        scanId, 
+        `Error scanning ${url} requested by ${email}: ${error.message || 'An unexpected error occurred'}`
+      );
+    }
   }
+}
+
+// Function to calculate accessibility score
+function calculateAccessibilityScore(result) {
+  // This is a simplified scoring algorithm
+  const totalIssues = result.issues.total;
+  const criticalWeight = 5;  // Critical issues are weighted 5x
+  const warningWeight = 2;   // Warnings are weighted 2x
+  
+  // Calculate weighted issues
+  const weightedIssues = 
+    (result.issues.critical * criticalWeight) + 
+    (result.issues.warning * warningWeight) + 
+    result.issues.info;
+  
+  // Base score - 100 is perfect
+  let score = 100;
+  
+  if (totalIssues > 0) {
+    // Pages factor - more pages scanned should be less penalizing per issue
+    const pagesFactor = Math.sqrt(result.pagesScanned);
+    
+    // Deduct points based on weighted issues, adjusted by page count
+    const penalty = (weightedIssues / pagesFactor) * 2;
+    score = Math.max(0, Math.min(100, 100 - penalty));
+  }
+  
+  // Round to nearest integer
+  return Math.round(score);
 }
 
 // Function to perform the actual scan
@@ -817,12 +1020,6 @@ async function extractLinks(page, baseUrl) {
           }
         })
         .filter(Boolean); // Remove nulls
-
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Server running at http://0.0.0.0:${PORT}`);
-  // ...
-});
       
       // Remove duplicates
       return [...new Set(allLinks)];
@@ -834,3 +1031,252 @@ app.listen(PORT, '0.0.0.0', () => {
     return [];
   }
 }
+
+// Function to generate PDF and CSV reports
+async function generateReports(scanId, url, results, summary) {
+  try {
+    await generatePdfReport(scanId, url, results, summary);
+    await generateCsvReport(scanId, results);
+    console.log(`Reports generated for scan ${scanId}`);
+    return true;
+  } catch (error) {
+    console.error(`Error generating reports for ${scanId}:`, error);
+    throw error;
+  }
+}
+
+// Function to generate PDF report
+async function generatePdfReport(scanId, url, results, summary) {
+  try {
+    const pdfPath = path.join(__dirname, 'reports', 'pdf', `${scanId}.pdf`);
+    const doc = new PDFDocument({ margin: 50 });
+    
+    // Pipe the PDF to a file
+    const writeStream = fs.createWriteStream(pdfPath);
+    doc.pipe(writeStream);
+    
+    // Add content to the PDF
+    
+    // Logo and title
+    doc.fontSize(20).text('A11yscan Accessibility Report', { align: 'center' });
+    doc.moveDown();
+    
+    // Scan information
+    doc.fontSize(14).text('Scan Information');
+    doc.moveDown(0.5);
+    doc.fontSize(12).text(`URL: ${url}`);
+    doc.text(`Scan ID: ${scanId}`);
+    doc.text(`Date: ${new Date().toLocaleDateString()}`);
+    doc.text(`Pages Scanned: ${summary.pagesScanned}`);
+    if (summary.accessibilityScore) {
+      doc.text(`Accessibility Score: ${summary.accessibilityScore}/100`);
+    }
+    doc.moveDown();
+    
+    // Summary
+    doc.fontSize(14).text('Summary of Findings');
+    doc.moveDown(0.5);
+    doc.fontSize(12).text(`Total Issues: ${summary.totalIssues}`);
+    doc.text(`Critical Issues: ${summary.criticalIssues}`, { continued: true }).fillColor('red').text(' ■', { align: 'right' }).fillColor('black');
+    doc.text(`Warning Issues: ${summary.warningIssues}`, { continued: true }).fillColor('orange').text(' ■', { align: 'right' }).fillColor('black');
+    doc.text(`Info Issues: ${summary.infoIssues}`, { continued: true }).fillColor('blue').text(' ■', { align: 'right' }).fillColor('black');
+    doc.moveDown();
+    
+    // Add issues by page
+    doc.fontSize(14).text('Issues By Page');
+    doc.moveDown(0.5);
+    
+    // Loop through each page result
+    for (const pageResult of results) {
+      // Skip pages with errors
+      if (pageResult.status !== 200) continue;
+      
+      // Page header
+      doc.fontSize(12).text(`Page: ${pageResult.url}`);
+      doc.text(`Scanned: ${new Date(pageResult.scannedAt).toLocaleString()}`);
+      doc.text(`Issues: ${pageResult.violationCounts.total}`);
+      doc.moveDown(0.5);
+      
+      // No issues found
+      if (pageResult.violationCounts.total === 0) {
+        doc.fontSize(10).text('No accessibility issues found on this page.');
+        doc.moveDown();
+        continue;
+      }
+      
+      // Issues table header
+      const issueTableTop = doc.y;
+      doc.fontSize(10).text('Issue', { width: 200, continued: true });
+      doc.text('Impact', { width: 100, continued: true });
+      doc.text('Elements', { width: 50 });
+      doc.moveDown(0.5);
+      
+      // Draw header underline
+      doc.moveTo(50, doc.y)
+         .lineTo(550, doc.y)
+         .stroke();
+      doc.moveDown(0.5);
+      
+      // Issues list
+      for (const violation of pageResult.violations) {
+        const nodeCount = violation.nodes?.length || 0;
+        
+        // Set color based on impact
+        let color = 'black';
+        switch (violation.impact) {
+          case 'critical':
+          case 'serious':
+            color = 'red';
+            break;
+          case 'moderate':
+          case 'minor':
+            color = 'orange';
+            break;
+          default:
+            color = 'blue';
+            break;
+        }
+        
+        // Issue row
+        doc.fillColor(color);
+        doc.fontSize(9).text(violation.description || violation.id, { width: 200, continued: true });
+        doc.text(violation.impact || 'unknown', { width: 100, continued: true });
+        doc.text(String(nodeCount), { width: 50 });
+        doc.fillColor('black');
+        
+        // Check if we need a new page
+        if (doc.y > 700) {
+          doc.addPage();
+        }
+      }
+      
+      doc.moveDown();
+    }
+    
+    // Add footer
+    const totalPages = doc.bufferedPageRange().count;
+    for (let i = 0; i < totalPages; i++) {
+      doc.switchToPage(i);
+      doc.fontSize(8).text(
+        `A11yscan Accessibility Report - ${scanId} - Page ${i + 1} of ${totalPages}`,
+        50, 
+        doc.page.height - 50,
+        { align: 'center' }
+      );
+    }
+    
+    // Finalize the PDF
+    doc.end();
+    
+    // Wait for the write stream to finish
+    return new Promise((resolve, reject) => {
+      writeStream.on('finish', resolve);
+      writeStream.on('error', reject);
+    });
+    
+  } catch (error) {
+    console.error(`Error generating PDF report for ${scanId}:`, error);
+    throw error;
+  }
+}
+
+// Function to generate CSV report
+async function generateCsvReport(scanId, results) {
+  try {
+    const csvPath = path.join(__dirname, 'reports', 'csv', `${scanId}.csv`);
+    
+    // Prepare data for CSV
+    const csvData = [];
+    
+    // Loop through each page result
+    for (const pageResult of results) {
+      // Skip pages with errors
+      if (pageResult.status !== 200) continue;
+      
+      // Add each violation
+      for (const violation of pageResult.violations) {
+        const nodeCount = violation.nodes?.length || 0;
+        
+        // Add a row for each node (instance) of the violation
+        for (let i = 0; i < nodeCount; i++) {
+          const node = violation.nodes[i];
+          const html = node?.html || '';
+          const target = node?.target || '';
+          
+          csvData.push({
+            page: pageResult.url,
+            issue: violation.id,
+            description: violation.description || '',
+            impact: violation.impact || 'unknown',
+            wcag: (violation.tags || []).filter(tag => tag.includes('wcag')).join(', '),
+            help: violation.help || '',
+            helpUrl: violation.helpUrl || '',
+            html: html.replace(/"/g, '""'), // Escape quotes for CSV
+            target: Array.isArray(target) ? target.join(', ') : target
+          });
+        }
+        
+        // If no nodes, still add a summary row
+        if (nodeCount === 0) {
+          csvData.push({
+            page: pageResult.url,
+            issue: violation.id,
+            description: violation.description || '',
+            impact: violation.impact || 'unknown',
+            wcag: (violation.tags || []).filter(tag => tag.includes('wcag')).join(', '),
+            help: violation.help || '',
+            helpUrl: violation.helpUrl || '',
+            html: '',
+            target: ''
+          });
+        }
+      }
+    }
+    
+    // Create CSV writer
+    const csvWriter = createObjectCsvWriter({
+      path: csvPath,
+      header: [
+        { id: 'page', title: 'Page URL' },
+        { id: 'issue', title: 'Issue ID' },
+        { id: 'description', title: 'Description' },
+        { id: 'impact', title: 'Impact' },
+        { id: 'wcag', title: 'WCAG Criteria' },
+        { id: 'help', title: 'Help Text' },
+        { id: 'helpUrl', title: 'Help URL' },
+        { id: 'html', title: 'HTML' },
+        { id: 'target', title: 'Target' }
+      ]
+    });
+    
+    // Write CSV file
+    await csvWriter.writeRecords(csvData);
+    
+    console.log(`CSV report generated for scan ${scanId}`);
+    return true;
+    
+  } catch (error) {
+    console.error(`Error generating CSV report for ${scanId}:`, error);
+    throw error;
+  }
+}
+
+// Call this on server start
+ensureDirectoriesExist();
+
+// Start the server
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`Server running on port ${PORT}`);
+});
+
+// Handle unhandled promise rejections
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+});
+
+// Handle uncaught exceptions
+process.on('uncaughtException', (error) => {
+  console.error('Uncaught Exception:', error);
+  // Give time for logging before exiting
+  setTimeout(() => process.exit(1), 1000);
+});
