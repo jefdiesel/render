@@ -1181,16 +1181,18 @@ async function generatePdfReport(scanId, url, results, summary) {
     }
     
     // Add footer
-    const totalPages = doc.bufferedPageRange().count;
-    for (let i = 0; i < totalPages; i++) {
-      doc.switchToPage(i);
-      doc.fontSize(8).text(
-        `A11yscan Accessibility Report - ${scanId} - Page ${i + 1} of ${totalPages}`,
-        50, 
-        doc.page.height - 50,
-        { align: 'center' }
-      );
-    }
+// Fix for the PDF footer code
+let i = 0;
+const range = doc.bufferedPageRange();
+for (i = range.start; i < range.start + range.count; i++) {
+  doc.switchToPage(i);
+  doc.fontSize(8).text(
+    `A11yscan Accessibility Report - ${scanId} - Page ${i + 1 - range.start} of ${range.count}`,
+    50, 
+    doc.page.height - 50,
+    { align: 'center' }
+  );
+}
     
     // Finalize the PDF
     doc.end();
