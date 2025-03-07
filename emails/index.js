@@ -27,6 +27,17 @@ async function sendEmail(options) {
 }
 
 /**
+ * Get the appropriate base URL for emails
+ * @returns {string} - Base URL to use in emails
+ */
+function getEmailBaseUrl() {
+  // Use APP_PUBLIC_URL if available in production, otherwise fall back to baseUrl
+  return process.env.NODE_ENV === 'production' && process.env.APP_PUBLIC_URL
+    ? process.env.APP_PUBLIC_URL
+    : config.baseUrl();
+}
+
+/**
  * Send confirmation email when a scan is started
  * @param {string} email - Recipient email
  * @param {string} url - Scanned URL
@@ -35,7 +46,7 @@ async function sendEmail(options) {
  */
 async function sendConfirmationEmail(email, url, scanId) {
   try {
-    const baseUrl = config.baseUrl();
+    const baseUrl = getEmailBaseUrl();
     const html = confirmationTemplate(baseUrl, url, scanId);
     
     await sendEmail({
@@ -62,7 +73,7 @@ async function sendConfirmationEmail(email, url, scanId) {
  */
 async function sendResultsEmail(email, url, scanId, summary) {
   try {
-    const baseUrl = config.baseUrl();
+    const baseUrl = getEmailBaseUrl();
     const html = resultsTemplate(baseUrl, url, scanId, summary);
     
     await sendEmail({
@@ -90,7 +101,7 @@ async function sendResultsEmail(email, url, scanId, summary) {
  */
 async function sendAdminResultsEmail(adminEmail, url, userEmail, scanId, summary) {
   try {
-    const baseUrl = config.baseUrl();
+    const baseUrl = getEmailBaseUrl();
     const html = adminResultsTemplate(baseUrl, url, userEmail, scanId, summary);
     
     await sendEmail({
@@ -117,7 +128,7 @@ async function sendAdminResultsEmail(adminEmail, url, userEmail, scanId, summary
  */
 async function sendDeepScanNotification(adminEmail, url, scanId, score) {
   try {
-    const baseUrl = config.baseUrl();
+    const baseUrl = getEmailBaseUrl();
     const html = deepScanTemplate(baseUrl, url, scanId, score);
     
     await sendEmail({
@@ -144,7 +155,7 @@ async function sendDeepScanNotification(adminEmail, url, scanId, score) {
  */
 async function sendErrorEmail(email, url, scanId, errorMessage) {
   try {
-    const baseUrl = config.baseUrl();
+    const baseUrl = getEmailBaseUrl();
     const html = errorTemplate(baseUrl, url, scanId, errorMessage);
     
     await sendEmail({

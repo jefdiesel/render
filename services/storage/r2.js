@@ -1,3 +1,4 @@
+// services/storage/r2.js
 const { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } = require('@aws-sdk/client-s3');
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 const config = require('../../config');
@@ -11,8 +12,8 @@ const pipeline = promisify(stream.pipeline);
 console.log('R2 Configuration:', {
   BUCKET: process.env.R2_BUCKET_NAME,
   ACCOUNT_ID: process.env.R2_ACCOUNT_ID,
-  ACCESS_KEY_ID: process.env.R2_ACCESS_KEY_ID ? '[SET]' : '[MISSING]',
-  SECRET_ACCESS_KEY: process.env.R2_SECRET_ACCESS_KEY ? '[SET]' : '[MISSING]',
+  ACCESS_KEY_ID: process.env.R2_ACCESS_KEY ? '[SET]' : '[MISSING]',
+  SECRET_ACCESS_KEY: process.env.R2_SECRET_ACCESS ? '[SET]' : '[MISSING]',
   PUBLIC_DOMAIN: process.env.R2_PUBLIC_DOMAIN
 });
 
@@ -25,15 +26,15 @@ let r2Client = null;
 function getR2Client() {
   if (r2Client) return r2Client;
   
-  console.log('Initializing R2 client...');
+  console.log('Initializing R2 client with credentials...');
   
   try {
     r2Client = new S3Client({
       region: 'auto',
       endpoint: `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
       credentials: {
-        accessKeyId: process.env.R2_ACCESS_KEY_ID,
-        secretAccessKey: process.env.R2_SECRET_ACCESS_KEY,
+        accessKeyId: process.env.R2_ACCESS_KEY || '',
+        secretAccessKey: process.env.R2_SECRET_ACCESS || '',
       },
     });
     
@@ -236,3 +237,4 @@ module.exports = {
   getPresignedUrl,
   deleteFile
 };
+

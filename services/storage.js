@@ -61,12 +61,21 @@ async function storeScanRequest(scanId, url, email, options = {}) {
   
   try {
     if (config.storage.useR2) {
-      // For R2, we'll serialize the JSON and upload as a buffer
-      const jsonData = JSON.stringify(scanData, null, 2);
-      const buffer = Buffer.from(jsonData, 'utf8');
-      const key = `${config.storage.r2.data}/${scanId}.json`;
-      
-      await r2Storage.uploadBuffer(buffer, key, 'application/json');
+      try {
+        // For R2, we'll serialize the JSON and upload as a buffer
+        const jsonData = JSON.stringify(scanData, null, 2);
+        const buffer = Buffer.from(jsonData, 'utf8');
+        const key = `${config.storage.r2.data}/${scanId}.json`;
+        
+        await r2Storage.uploadBuffer(buffer, key, 'application/json');
+      } catch (error) {
+        console.error('R2 storage failed, falling back to local storage:', error.message);
+        // Fall back to local storage
+        await fsPromises.writeFile(
+          path.join(config.paths.data, `${scanId}.json`),
+          JSON.stringify(scanData, null, 2)
+        );
+      }
     } else {
       // For local storage, write to file
       await fsPromises.writeFile(
@@ -93,21 +102,28 @@ async function getScanData(scanId) {
     let data;
     
     if (config.storage.useR2) {
-      // For R2, download the file to a temporary location and read it
-      const key = `${config.storage.r2.data}/${scanId}.json`;
-      const tempPath = path.join(config.paths.data, `${scanId}_temp.json`);
-      
       try {
-        // Download file from R2
-        await r2Storage.downloadFile(key, tempPath);
+        // For R2, download the file to a temporary location and read it
+        const key = `${config.storage.r2.data}/${scanId}.json`;
+        const tempPath = path.join(config.paths.data, `${scanId}_temp.json`);
         
-        // Read the data
-        data = await fsPromises.readFile(tempPath, 'utf8');
-        
-        // Clean up temp file
-        await fsPromises.unlink(tempPath);
+        try {
+          // Download file from R2
+          await r2Storage.downloadFile(key, tempPath);
+          
+          // Read the data
+          data = await fsPromises.readFile(tempPath, 'utf8');
+          
+          // Clean up temp file
+          await fsPromises.unlink(tempPath);
+        } catch (error) {
+          console.error(`Error downloading scan data from R2 for ${scanId}, trying local storage:`, error.message);
+          // Try local storage as fallback
+          const filePath = path.join(config.paths.data, `${scanId}.json`);
+          data = await fsPromises.readFile(filePath, 'utf8');
+        }
       } catch (error) {
-        console.error(`Error downloading scan data from R2 for ${scanId}:`, error);
+        console.error(`Error retrieving scan data for ${scanId}:`, error);
         return null;
       }
     } else {
@@ -142,12 +158,21 @@ async function updateScanData(scanId, updates) {
     const updatedData = { ...scanData, ...updates };
     
     if (config.storage.useR2) {
-      // For R2, serialize and upload
-      const jsonData = JSON.stringify(updatedData, null, 2);
-      const buffer = Buffer.from(jsonData, 'utf8');
-      const key = `${config.storage.r2.data}/${scanId}.json`;
-      
-      await r2Storage.uploadBuffer(buffer, key, 'application/json');
+      try {
+        // For R2, serialize and upload
+        const jsonData = JSON.stringify(updatedData, null, 2);
+        const buffer = Buffer.from(jsonData, 'utf8');
+        const key = `${config.storage.r2.data}/${scanId}.json`;
+        
+        await r2Storage.uploadBuffer(buffer, key, 'application/json');
+      } catch (error) {
+        console.error(`R2 storage update failed, falling back to local storage: ${error.message}`);
+        // Fall back to local storage
+        await fsPromises.writeFile(
+          path.join(config.paths.data, `${scanId}.json`),
+          JSON.stringify(updatedData, null, 2)
+        );
+      }
     } else {
       // For local storage, write to file
       await fsPromises.writeFile(
