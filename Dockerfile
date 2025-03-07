@@ -30,5 +30,11 @@ RUN npm install
 # Copy the rest of your app
 COPY . .
 
-# Command to start your app (adjust based on your setup)
+# Create the necessary directory structure for the refactored app
+RUN mkdir -p data public/images reports/pdf reports/csv
+
+# Ensure correct permissions
+RUN chmod -R 755 /app
+
+# Command to start your app
 CMD ["node", "server.js"]
