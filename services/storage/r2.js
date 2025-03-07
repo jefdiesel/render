@@ -1,4 +1,3 @@
-// services/storage/r2.js
 const { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } = require('@aws-sdk/client-s3');
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 const config = require('../../config');
@@ -12,8 +11,8 @@ const pipeline = promisify(stream.pipeline);
 console.log('R2 Configuration:', {
   BUCKET: process.env.R2_BUCKET_NAME,
   ACCOUNT_ID: process.env.R2_ACCOUNT_ID,
-  ACCESS_KEY_ID: process.env.R2_ACCESS_KEY ? '[SET]' : '[MISSING]',
-  SECRET_ACCESS_KEY: process.env.R2_SECRET_ACCESS ? '[SET]' : '[MISSING]',
+  ACCESS_KEY_ID: process.env.R2_ACCESS_KEY_ID ? '[SET]' : '[MISSING]',
+  SECRET_ACCESS_KEY: process.env.R2_SECRET_ACCESS_KEY ? '[SET]' : '[MISSING]',
   PUBLIC_DOMAIN: process.env.R2_PUBLIC_DOMAIN
 });
 
@@ -33,8 +32,8 @@ function getR2Client() {
       region: 'auto',
       endpoint: `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
       credentials: {
-        accessKeyId: process.env.R2_ACCESS_KEY || '',
-        secretAccessKey: process.env.R2_SECRET_ACCESS || '',
+        accessKeyId: process.env.R2_ACCESS_KEY_ID || '',
+        secretAccessKey: process.env.R2_SECRET_ACCESS_KEY || '',
       },
     });
     
@@ -68,7 +67,10 @@ async function uploadFile(filePath, key, contentType) {
     await client.send(new PutObjectCommand(params));
     
     // Create URL for accessing the file
-    const publicUrl = `https://${process.env.R2_PUBLIC_DOMAIN}/${key}`;
+    const publicDomain = process.env.R2_PUBLIC_DOMAIN || '';
+    const publicUrl = publicDomain.startsWith('http') 
+      ? `${publicDomain}/${key}` 
+      : `https://${publicDomain}/${key}`;
     
     return {
       key,
@@ -101,7 +103,10 @@ async function uploadBuffer(buffer, key, contentType) {
     await client.send(new PutObjectCommand(params));
     
     // Create URL for accessing the file
-    const publicUrl = `https://${process.env.R2_PUBLIC_DOMAIN}/${key}`;
+    const publicDomain = process.env.R2_PUBLIC_DOMAIN || '';
+    const publicUrl = publicDomain.startsWith('http') 
+      ? `${publicDomain}/${key}` 
+      : `https://${publicDomain}/${key}`;
     
     return {
       key,
@@ -237,4 +242,3 @@ module.exports = {
   getPresignedUrl,
   deleteFile
 };
-
