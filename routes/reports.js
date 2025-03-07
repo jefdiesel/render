@@ -1,8 +1,11 @@
+// routes/reports.js
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
 const fsPromises = fs.promises;
 const config = require('../config');
+const r2Storage = config.storage.useR2 ? require('../services/storage/r2') : null;
+const storage = require('../services/storage');
 
 const router = express.Router();
 
@@ -13,6 +16,23 @@ const router = express.Router();
 router.get('/reports/:scanId/pdf', async (req, res) => {
   try {
     const { scanId } = req.params;
+    
+    // Check if using R2 storage
+    if (config.storage.useR2) {
+      // Get scan data to check if report exists
+      const scanData = await storage.getScanData(scanId);
+      
+      if (!scanData || scanData.status !== 'completed') {
+        return res.status(404).json({ error: 'PDF report not found' });
+      }
+      
+      const key = `${config.storage.r2.pdf}/${scanId}.pdf`;
+      
+      // Stream directly from R2 to the response
+      return r2Storage.streamFileToResponse(key, res, 'application/pdf', `${scanId}.pdf`);
+    }
+    
+    // If using local storage, serve file from filesystem
     const pdfPath = path.join(config.paths.pdfReports, `${scanId}.pdf`);
     
     try {
@@ -39,6 +59,23 @@ router.get('/reports/:scanId/pdf', async (req, res) => {
 router.get('/reports/:scanId/csv', async (req, res) => {
   try {
     const { scanId } = req.params;
+    
+    // Check if using R2 storage
+    if (config.storage.useR2) {
+      // Get scan data to check if report exists
+      const scanData = await storage.getScanData(scanId);
+      
+      if (!scanData || scanData.status !== 'completed') {
+        return res.status(404).json({ error: 'CSV report not found' });
+      }
+      
+      const key = `${config.storage.r2.csv}/${scanId}.csv`;
+      
+      // Stream directly from R2 to the response
+      return r2Storage.streamFileToResponse(key, res, 'text/csv', `${scanId}.csv`);
+    }
+    
+    // If using local storage, serve file from filesystem
     const csvPath = path.join(config.paths.csvReports, `${scanId}.csv`);
     
     try {

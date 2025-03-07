@@ -1,12 +1,15 @@
+// services/reports/csv.js
 const path = require('path');
+const fs = require('fs');
 const { createObjectCsvWriter } = require('csv-writer');
 const config = require('../../config');
+const r2Storage = config.storage.useR2 ? require('../storage/r2') : null;
 
 /**
  * Generate CSV report
  * @param {string} scanId - Scan ID
  * @param {Array} results - Scan results
- * @returns {Promise<boolean>}
+ * @returns {Promise<{path: string, url?: string}>} - CSV file info
  */
 async function generateCsvReport(scanId, results) {
   try {
@@ -79,8 +82,24 @@ async function generateCsvReport(scanId, results) {
     // Write CSV file
     await csvWriter.writeRecords(csvData);
     
-    console.log(`CSV report generated for scan ${scanId}`);
-    return true;
+    // If using R2, upload the file and return the URL
+    if (config.storage.useR2) {
+      const key = `${config.storage.r2.csv}/${scanId}.csv`;
+      const result = await r2Storage.uploadFile(csvPath, key, 'text/csv');
+      
+      // Optionally, delete the local file after upload
+      fs.unlinkSync(csvPath);
+      
+      return {
+        path: csvPath,
+        url: result.url
+      };
+    }
+    
+    // If using local storage, return the local path
+    return {
+      path: csvPath
+    };
     
   } catch (error) {
     console.error(`Error generating CSV report for ${scanId}:`, error);

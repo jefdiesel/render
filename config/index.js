@@ -1,3 +1,4 @@
+// config/index.js
 const path = require('path');
 const dotenv = require('dotenv');
 
@@ -36,12 +37,31 @@ module.exports = {
     deepScanThreshold: 90, // Score threshold to trigger deep scan
     maxPages: 5 // Maximum pages for free scan
   },
+  storage: {
+    // Whether to use R2 or local filesystem
+    useR2: process.env.STORAGE_USE_R2 === 'true',
+    
+    // R2 folder paths
+    r2: {
+      reports: 'reports',
+      pdf: 'reports/pdf',
+      csv: 'reports/csv',
+      images: 'images',
+      data: 'data'
+    }
+  },
   baseUrl: () => {
     return process.env.NODE_ENV === 'production'
       ? 'https://a11yscan.xyz'
       : `http://localhost:${module.exports.port}`;
   },
   reportsBaseUrl: () => {
+    // If using R2 with custom domain for reports
+    if (process.env.STORAGE_USE_R2 === 'true' && process.env.R2_PUBLIC_DOMAIN) {
+      return `https://${process.env.R2_PUBLIC_DOMAIN}`;
+    }
+    
+    // Otherwise use Render domain
     return process.env.NODE_ENV === 'production'
       ? 'https://render-cpug.onrender.com'
       : `http://localhost:${module.exports.port}`;

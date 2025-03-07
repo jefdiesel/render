@@ -1,7 +1,9 @@
+// services/reports/pdf.js
 const fs = require('fs');
 const path = require('path');
 const PDFDocument = require('pdfkit');
 const config = require('../../config');
+const r2Storage = config.storage.useR2 ? require('../storage/r2') : null;
 
 /**
  * Generate PDF report
@@ -9,15 +11,28 @@ const config = require('../../config');
  * @param {string} url - Scanned URL
  * @param {Array} results - Scan results
  * @param {Object} summary - Scan summary
- * @returns {Promise<boolean>}
+ * @returns {Promise<{path: string, url?: string}>} - PDF file info
  */
 async function generatePdfReport(scanId, url, results, summary) {
   try {
+    // Path for local storage
     const pdfPath = path.join(config.paths.pdfReports, `${scanId}.pdf`);
+    
+    // Create a PDF document 
     const doc = new PDFDocument({ margin: 50 });
     
-    // Pipe the PDF to a file - using regular fs, not promises
-    const writeStream = fs.createWriteStream(pdfPath);
+    // Create a write stream - using regular fs, not promises
+    let writeStream;
+    
+    if (config.storage.useR2) {
+      // If using R2, we'll write to a local temp file first
+      writeStream = fs.createWriteStream(pdfPath);
+    } else {
+      // If using local storage, write directly to destination
+      writeStream = fs.createWriteStream(pdfPath);
+    }
+    
+    // Pipe the PDF to the write stream
     doc.pipe(writeStream);
     
     // Add content to the PDF
@@ -129,10 +144,29 @@ async function generatePdfReport(scanId, url, results, summary) {
     doc.end();
     
     // Wait for the write stream to finish
-    return new Promise((resolve, reject) => {
+    await new Promise((resolve, reject) => {
       writeStream.on('finish', resolve);
       writeStream.on('error', reject);
     });
+    
+    // If using R2, upload the file and return the URL
+    if (config.storage.useR2) {
+      const key = `${config.storage.r2.pdf}/${scanId}.pdf`;
+      const result = await r2Storage.uploadFile(pdfPath, key, 'application/pdf');
+      
+      // Optionally, delete the local file after upload
+      fs.unlinkSync(pdfPath);
+      
+      return {
+        path: pdfPath,
+        url: result.url
+      };
+    }
+    
+    // If using local storage, return the local path
+    return {
+      path: pdfPath
+    };
     
   } catch (error) {
     console.error(`Error generating PDF report for ${scanId}:`, error);
