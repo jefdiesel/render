@@ -31,15 +31,30 @@ console.log('App Configuration:', {
   APP_PUBLIC_URL: process.env.APP_PUBLIC_URL,
   STORAGE_USE_R2: process.env.STORAGE_USE_R2,
   baseUrl: config.baseUrl(),
-  reportsBaseUrl: config.reportsBaseUrl()
+  reportsBaseUrl: config.reportsBaseUrl(),
+  CORS_ORIGINS: config.cors.origin
 });
 
 // Middleware
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
-// Configure CORS
-app.use(cors(config.cors));
+// Configure CORS with detailed options
+const corsOptions = {
+  ...config.cors,
+  preflightContinue: false,
+  optionsSuccessStatus: 204
+};
+
+// Apply CORS middleware
+app.use(cors(corsOptions));
+
+// Logging middleware for CORS debugging
+app.use((req, res, next) => {
+  console.log(`[CORS DEBUG] Request from origin: ${req.get('origin')}`);
+  console.log(`[CORS DEBUG] Request method: ${req.method}`);
+  next();
+});
 
 // Rate limiting
 const limiter = rateLimit({
@@ -58,12 +73,22 @@ app.use(express.static(path.join(__dirname, 'public')));
 // Register routes
 app.use(routes);
 
+// Error handling middleware
+app.use((err, req, res, next) => {
+  console.error('Unhandled Error:', err);
+  res.status(500).json({
+    error: 'An unexpected error occurred',
+    message: err.message || 'Internal Server Error'
+  });
+});
+
 // Ensure necessary directories exist at startup
 storage.ensureDirectoriesExist()
   .then(() => {
     // Start the server
     app.listen(PORT, '0.0.0.0', () => {
       console.log(`Server running on port ${PORT}`);
+      console.log(`Allowed CORS origins: ${config.cors.origin.join(', ')}`);
     });
   })
   .catch(error => {
@@ -82,3 +107,5 @@ process.on('uncaughtException', (error) => {
   // Give time for logging before exiting
   setTimeout(() => process.exit(1), 1000);
 });
+
+module.exports = app; // For testing purposes

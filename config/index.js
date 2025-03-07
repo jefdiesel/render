@@ -19,11 +19,34 @@ module.exports = {
     adminEmail: process.env.ADMIN_EMAIL || 'hello@a11yscan.xyz'
   },
   cors: {
+    // Dynamically set origins based on environment
     origin: process.env.NODE_ENV === 'production' 
       ? ['https://a11yscan.xyz'] 
-      : ['http://localhost:3000'],
-    methods: ['GET', 'POST'],
-    allowedHeaders: ['Content-Type', 'X-API-Key']
+      : [
+          'http://localhost:3000', 
+          'https://render-docker-fdf0.onrender.com',
+          'http://localhost:8080',  // Additional dev ports
+          'http://127.0.0.1:3000'   // Localhost alternative
+        ],
+    
+    // Allow more methods and headers
+    methods: ['GET', 'POST', 'OPTIONS', 'PUT', 'DELETE'],
+    
+    // Comprehensive headers
+    allowedHeaders: [
+      'Content-Type', 
+      'X-API-Key', 
+      'Origin', 
+      'Accept', 
+      'Authorization'
+    ],
+    
+    // Enable credentials support
+    credentials: true,
+    
+    // Additional CORS configuration
+    preflightContinue: false,
+    optionsSuccessStatus: 204
   },
   paths: {
     data: path.join(__dirname, '..', 'data'),
