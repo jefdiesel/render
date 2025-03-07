@@ -1,6 +1,7 @@
 const express = require('express');
 const path = require('path');
-const fs = require('fs').promises;
+const fs = require('fs');
+const fsPromises = fs.promises;
 const nodemailer = require('nodemailer');
 const bodyParser = require('body-parser');
 const { v4: uuidv4 } = require('uuid');
@@ -73,7 +74,7 @@ async function ensureDirectoriesExist() {
   
   for (const dir of dirs) {
     try {
-      await fs.mkdir(dir, { recursive: true });
+      await fsPromises.mkdir(dir, { recursive: true });
     } catch (error) {
       console.error(`Error creating directory ${dir}:`, error);
     }
@@ -251,7 +252,7 @@ app.get('/api/reports/:scanId/pdf', async (req, res) => {
     const pdfPath = path.join(__dirname, 'reports', 'pdf', `${scanId}.pdf`);
     
     try {
-      await fs.access(pdfPath);
+      await fsPromises.access(pdfPath);
     } catch (error) {
       return res.status(404).json({ error: 'PDF report not found' });
     }
@@ -274,7 +275,7 @@ app.get('/api/reports/:scanId/csv', async (req, res) => {
     const csvPath = path.join(__dirname, 'reports', 'csv', `${scanId}.csv`);
     
     try {
-      await fs.access(csvPath);
+      await fsPromises.access(csvPath);
     } catch (error) {
       return res.status(404).json({ error: 'CSV report not found' });
     }
@@ -314,7 +315,7 @@ async function storeScanRequest(scanId, url, email, options = {}) {
   
   try {
     // Write scan data to file
-    await fs.writeFile(
+    await fsPromises.writeFile(
       path.join(__dirname, 'data', `${scanId}.json`),
       JSON.stringify(scanData, null, 2)
     );
@@ -331,7 +332,7 @@ async function storeScanRequest(scanId, url, email, options = {}) {
 async function getScanData(scanId) {
   try {
     const filePath = path.join(__dirname, 'data', `${scanId}.json`);
-    const data = await fs.readFile(filePath, 'utf8');
+    const data = await fsPromises.readFile(filePath, 'utf8');
     return JSON.parse(data);
   } catch (error) {
     console.error(`Error retrieving scan data for ${scanId}:`, error);
@@ -353,7 +354,7 @@ async function updateScanData(scanId, updates) {
     const updatedData = { ...scanData, ...updates };
     
     // Write updated data back to file
-    await fs.writeFile(
+    await fsPromises.writeFile(
       path.join(__dirname, 'data', `${scanId}.json`),
       JSON.stringify(updatedData, null, 2)
     );
@@ -365,7 +366,8 @@ async function updateScanData(scanId, updates) {
     throw error;
   }
 }
-// this is the section
+
+// Function to launch browser
 async function launchBrowser() {
   try {
     console.log('Launching browser with Puppeteer bundled Chrome');
@@ -677,7 +679,7 @@ async function sendErrorEmail(email, url, scanId, errorMessage) {
           
           <ul>
             <li>The website is not accessible or requires authentication</li>
-            <li>The website has a robots.txt file blocking our scanner</li>
+li>The website has a robots.txt file blocking our scanner</li>
             <li>The website has security measures preventing automated scanning</li>
             <li>There might be temporary connectivity issues</li>
           </ul>
@@ -694,8 +696,7 @@ async function sendErrorEmail(email, url, scanId, errorMessage) {
           
           <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #e5e7eb; font-size: 12px; color: #6b7280; text-align: center;">
             <p>© ${new Date().getFullYear()} A11yscan. All rights reserved.</p>
-
-    <p>If you have any questions, please contact us at <a href="mailto:hello@a11yscan.xyz" style="color: #4f46e5;">hello@a11yscan.xyz</a></p>
+            <p>If you have any questions, please contact us at <a href="mailto:hello@a11yscan.xyz" style="color: #4f46e5;">hello@a11yscan.xyz</a></p>
           </div>
         </div>
       `
@@ -780,25 +781,25 @@ async function initiateFreeScan(scanId, url, email, options = {}) {
       await sendDeepScanNotification(options.adminEmail || 'hello@a11yscan.xyz', url, scanId, accessibilityScore);
     }
     
-} catch (error) {
-  console.error(`Error in scan ${scanId}:`, error);
-  
-  // Update scan status to failed
-  await updateScanData(scanId, { status: 'failed' });
-  
-  // Only send error notification to admin, not to the user
-  await sendErrorEmail('errors@a11yscan.xyz', url, scanId, 
-    `Error scanning ${url} requested by ${email}: ${error.message || 'An unexpected error occurred'}`);
-  
-  // Still send a notification to the user but without detailed error
-  await sendErrorEmail(
-    email, 
-    url, 
-    scanId, 
-    'We encountered an issue while scanning your website. Our team has been notified and will investigate.'
-      );
-    }
+  } catch (error) {
+    console.error(`Error in scan ${scanId}:`, error);
+    
+    // Update scan status to failed
+    await updateScanData(scanId, { status: 'failed' });
+    
+    // Only send error notification to admin, not to the user
+    await sendErrorEmail('errors@a11yscan.xyz', url, scanId, 
+      `Error scanning ${url} requested by ${email}: ${error.message || 'An unexpected error occurred'}`);
+    
+    // Still send a notification to the user but without detailed error
+    await sendErrorEmail(
+      email, 
+      url, 
+      scanId, 
+      'We encountered an issue while scanning your website. Our team has been notified and will investigate.'
+    );
   }
+}
 
 // Function to calculate accessibility score
 function calculateAccessibilityScore(result) {
@@ -947,6 +948,7 @@ async function performScan(url, scanId, maxPages = 5) {
     await browser.close();
   }
 }
+
 // Function to run accessibility tests on a page
 async function runAccessibilityTests(page) {
   // Inject axe-core library
@@ -1057,7 +1059,7 @@ async function extractLinks(page, baseUrl) {
   }
 }
 
-// Function to generate PDF and CSV reports
+// Function to generate reports
 async function generateReports(scanId, url, results, summary) {
   try {
     await generatePdfReport(scanId, url, results, summary);
@@ -1076,7 +1078,7 @@ async function generatePdfReport(scanId, url, results, summary) {
     const pdfPath = path.join(__dirname, 'reports', 'pdf', `${scanId}.pdf`);
     const doc = new PDFDocument({ margin: 50 });
     
-    // Pipe the PDF to a file
+    // Pipe the PDF to a file - using regular fs, not promises
     const writeStream = fs.createWriteStream(pdfPath);
     doc.pipe(writeStream);
     
