@@ -18,17 +18,14 @@ module.exports = {
     errorEmail: process.env.ERROR_EMAIL || 'errors@a11yscan.xyz',
     adminEmail: process.env.ADMIN_EMAIL || 'hello@a11yscan.xyz'
   },
-  cors: {
-    // Dynamically set origins based on environment
-    origin: process.env.NODE_ENV === 'production' 
-      ? ['https://a11yscan.xyz'] 
-      : [
-          'http://localhost:3000', 
-          'https://render-docker-fdf0.onrender.com',
-          'http://localhost:8080',  // Additional dev ports
-          'http://127.0.0.1:3000'   // Localhost alternative
-        ],
-    
+// In config/index.js, update the cors configuration
+cors: {
+  origin: process.env.NODE_ENV === 'production' 
+    ? ['https://a11yscan.xyz', 'https://www.a11yscan.xyz', 'https://render-docker-fdf0.onrender.com'] 
+    : ['http://localhost:3000'],
+  methods: ['GET', 'POST', 'OPTIONS'],  // Added OPTIONS for preflight requests
+  allowedHeaders: ['Content-Type', 'X-API-Key']
+},    
     // Allow more methods and headers
     methods: ['GET', 'POST', 'OPTIONS', 'PUT', 'DELETE'],
     
