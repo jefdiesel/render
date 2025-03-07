@@ -52,7 +52,7 @@ module.exports = {
   },
   baseUrl: () => {
     return process.env.NODE_ENV === 'production'
-      ? 'https://a11yscan.xyz'
+      ? (process.env.APP_PUBLIC_URL || 'https://a11yscan.xyz')
       : `http://localhost:${module.exports.port}`;
   },
   reportsBaseUrl: () => {
@@ -61,9 +61,9 @@ module.exports = {
       return `https://${process.env.R2_PUBLIC_DOMAIN}`;
     }
     
-    // Otherwise use Render domain
+    // Otherwise use app URL
     return process.env.NODE_ENV === 'production'
-      ? 'https://render-cpug.onrender.com'
+      ? (process.env.APP_PUBLIC_URL || 'https://render-docker-fdf0.onrender.com')
       : `http://localhost:${module.exports.port}`;
   }
 };

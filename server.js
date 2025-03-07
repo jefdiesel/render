@@ -24,6 +24,16 @@ console.log('Email Config at Runtime:', {
   EMAIL_PASS: config.email.pass ? '[REDACTED]' : undefined
 });
 
+// Add this additional logging
+console.log('App Configuration:', {
+  PORT: config.port,
+  NODE_ENV: config.env,
+  APP_PUBLIC_URL: process.env.APP_PUBLIC_URL,
+  STORAGE_USE_R2: process.env.STORAGE_USE_R2,
+  baseUrl: config.baseUrl(),
+  reportsBaseUrl: config.reportsBaseUrl()
+});
+
 // Middleware
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
@@ -72,4 +82,3 @@ process.on('uncaughtException', (error) => {
   // Give time for logging before exiting
   setTimeout(() => process.exit(1), 1000);
 });
-

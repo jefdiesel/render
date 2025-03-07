@@ -1,4 +1,3 @@
-// services/storage/r2.js
 const { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } = require('@aws-sdk/client-s3');
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 const config = require('../../config');
@@ -7,6 +6,15 @@ const path = require('path');
 const stream = require('stream');
 const { promisify } = require('util');
 const pipeline = promisify(stream.pipeline);
+
+// Add debugging log for R2 configuration
+console.log('R2 Configuration:', {
+  BUCKET: process.env.R2_BUCKET_NAME,
+  ACCOUNT_ID: process.env.R2_ACCOUNT_ID,
+  ACCESS_KEY_ID: process.env.R2_ACCESS_KEY_ID ? '[SET]' : '[MISSING]',
+  SECRET_ACCESS_KEY: process.env.R2_SECRET_ACCESS_KEY ? '[SET]' : '[MISSING]',
+  PUBLIC_DOMAIN: process.env.R2_PUBLIC_DOMAIN
+});
 
 let r2Client = null;
 
@@ -17,16 +25,24 @@ let r2Client = null;
 function getR2Client() {
   if (r2Client) return r2Client;
   
-  r2Client = new S3Client({
-    region: 'auto',
-    endpoint: `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
-    credentials: {
-      accessKeyId: process.env.R2_ACCESS_KEY_ID,
-      secretAccessKey: process.env.R2_SECRET_ACCESS_KEY,
-    },
-  });
+  console.log('Initializing R2 client...');
   
-  return r2Client;
+  try {
+    r2Client = new S3Client({
+      region: 'auto',
+      endpoint: `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+      credentials: {
+        accessKeyId: process.env.R2_ACCESS_KEY_ID,
+        secretAccessKey: process.env.R2_SECRET_ACCESS_KEY,
+      },
+    });
+    
+    console.log('R2 client initialized successfully');
+    return r2Client;
+  } catch (error) {
+    console.error('Error initializing R2 client:', error);
+    throw error;
+  }
 }
 
 /**
