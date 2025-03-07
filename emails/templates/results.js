@@ -2,8 +2,7 @@
  * Results email sent when a scan is completed
  */
 module.exports = (baseUrl, url, scanId, summary) => {
-  const reportUrl = `${baseUrl}/reports/${scanId}`;
-  
+ const reportUrl = `${baseUrl.trim()}/reports/${scanId}`;  
   return `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
       <div style="text-align: center; margin-bottom: 20px;">

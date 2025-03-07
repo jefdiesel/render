@@ -2,7 +2,7 @@
  * Admin notification email sent when a scan is completed
  */
 module.exports = (baseUrl, url, userEmail, scanId, summary) => {
-  const reportUrl = `${baseUrl}/reports/${scanId}`;
+  const reportUrl = `${baseUrl.trim()}/reports/${scanId}`;
   
   return `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">

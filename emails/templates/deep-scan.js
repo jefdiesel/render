@@ -23,7 +23,7 @@ module.exports = (baseUrl, url, scanId, score) => {
       <p>This site may be a good prospect for showcasing the benefits of our premium services.</p>
       
       <div style="text-align: center; margin: 30px 0;">
-        <a href="${baseUrl}/reports/${scanId}" style="background-color: #4f46e5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block;">View Scan Report</a>
+        <a href="${baseUrl.trim()}/reports/${scanId}" style="background-color: #4f46e5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block;">View Scan Report</a>
       </div>
       
       <p>Best regards,<br>The A11yscan System</p>
