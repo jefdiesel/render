@@ -18,25 +18,23 @@ module.exports = {
     errorEmail: process.env.ERROR_EMAIL || 'errors@a11yscan.xyz',
     adminEmail: process.env.ADMIN_EMAIL || 'hello@a11yscan.xyz'
   },
-// In config/index.js, update the cors configuration
-cors: {
-  origin: process.env.NODE_ENV === 'production' 
-    ? ['https://a11yscan.xyz', 'https://www.a11yscan.xyz', 'https://render-docker-fdf0.onrender.com'] 
-    : ['http://localhost:3000'],
-  methods: ['GET', 'POST', 'OPTIONS'],  // Added OPTIONS for preflight requests
-  allowedHeaders: ['Content-Type', 'X-API-Key']
-},    
-    // Allow more methods and headers
-    methods: ['GET', 'POST', 'OPTIONS', 'PUT', 'DELETE'],
+  cors: {
+    // Use environment variables if available, otherwise use defaults
+    origin: process.env.CORS_ALLOW_ORIGIN 
+      ? process.env.CORS_ALLOW_ORIGIN.split(',') 
+      : (process.env.NODE_ENV === 'production' 
+        ? ['https://a11yscan.xyz', 'https://www.a11yscan.xyz', 'https://render-docker-fdf0.onrender.com'] 
+        : ['http://localhost:3000']),
+    
+    // Allow necessary methods
+    methods: process.env.CORS_ALLOW_METHODS 
+      ? process.env.CORS_ALLOW_METHODS.split(',') 
+      : ['GET', 'POST', 'OPTIONS', 'PUT', 'DELETE'],
     
     // Comprehensive headers
-    allowedHeaders: [
-      'Content-Type', 
-      'X-API-Key', 
-      'Origin', 
-      'Accept', 
-      'Authorization'
-    ],
+    allowedHeaders: process.env.CORS_ALLOW_HEADERS
+      ? process.env.CORS_ALLOW_HEADERS.split(',')
+      : ['Content-Type', 'X-API-Key', 'Origin', 'Accept', 'Authorization'],
     
     // Enable credentials support
     credentials: true,
@@ -71,19 +69,21 @@ cors: {
     }
   },
   baseUrl: () => {
+    // Use APP_PUBLIC_URL if available, otherwise default to a11yscan.xyz in production
     return process.env.NODE_ENV === 'production'
-      ? (process.env.APP_PUBLIC_URL || 'https://a11yscan.xyz')
+      ? (process.env.APP_PUBLIC_URL || 'https://a11yscan.xyz').trim()
       : `http://localhost:${module.exports.port}`;
   },
   reportsBaseUrl: () => {
     // If using R2 with custom domain for reports
     if (process.env.STORAGE_USE_R2 === 'true' && process.env.R2_PUBLIC_DOMAIN) {
-      return `https://${process.env.R2_PUBLIC_DOMAIN}`;
+      const domain = process.env.R2_PUBLIC_DOMAIN.trim();
+      return domain.startsWith('http') ? domain : `https://${domain}`;
     }
     
     // Otherwise use app URL
     return process.env.NODE_ENV === 'production'
-      ? (process.env.APP_PUBLIC_URL || 'https://render-docker-fdf0.onrender.com')
+      ? (process.env.APP_PUBLIC_URL || 'https://render-docker-fdf0.onrender.com').trim()
       : `http://localhost:${module.exports.port}`;
   }
 };

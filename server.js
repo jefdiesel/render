@@ -49,6 +49,34 @@ const corsOptions = {
 // Apply CORS middleware
 app.use(cors(corsOptions));
 
+// Additional CORS handling - ensure this is before any routes
+app.use((req, res, next) => {
+  // Read origins from config
+  const allowedOrigins = Array.isArray(config.cors.origin) 
+    ? config.cors.origin 
+    : [config.cors.origin];
+  
+  const origin = req.headers.origin;
+  
+  // Check if the origin is in our allowed list
+  if (origin && allowedOrigins.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Access-Control-Allow-Methods', config.cors.methods.join(','));
+    res.setHeader('Access-Control-Allow-Headers', config.cors.allowedHeaders.join(','));
+    
+    if (config.cors.credentials) {
+      res.setHeader('Access-Control-Allow-Credentials', 'true');
+    }
+  }
+  
+  // Handle preflight requests
+  if (req.method === 'OPTIONS') {
+    return res.status(204).send();
+  }
+  
+  next();
+});
+
 // Logging middleware for CORS debugging
 app.use((req, res, next) => {
   console.log(`[CORS DEBUG] Request from origin: ${req.get('origin')}`);
@@ -88,7 +116,7 @@ storage.ensureDirectoriesExist()
     // Start the server
     app.listen(PORT, '0.0.0.0', () => {
       console.log(`Server running on port ${PORT}`);
-      console.log(`Allowed CORS origins: ${config.cors.origin.join(', ')}`);
+      console.log(`Allowed CORS origins: ${Array.isArray(config.cors.origin) ? config.cors.origin.join(', ') : config.cors.origin}`);
     });
   })
   .catch(error => {
