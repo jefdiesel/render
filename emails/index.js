@@ -31,10 +31,21 @@ async function sendEmail(options) {
  * @returns {string} - Base URL to use in emails
  */
 function getEmailBaseUrl() {
-  // Use APP_PUBLIC_URL if available in production, otherwise fall back to baseUrl
-  return process.env.NODE_ENV === 'production' && process.env.APP_PUBLIC_URL
-    ? process.env.APP_PUBLIC_URL
-    : config.baseUrl();
+  // Always use APP_PUBLIC_URL in production, regardless of other settings
+  if (process.env.NODE_ENV === 'production' && process.env.APP_PUBLIC_URL) {
+    console.log(`Using production APP_PUBLIC_URL for email: ${process.env.APP_PUBLIC_URL}`);
+    return process.env.APP_PUBLIC_URL.trim();
+  }
+  
+  // Force production URL even in development mode if we're sending real emails
+  if (process.env.FORCE_PRODUCTION_URLS === 'true' && process.env.APP_PUBLIC_URL) {
+    console.log(`Using FORCE_PRODUCTION_URLS APP_PUBLIC_URL for email: ${process.env.APP_PUBLIC_URL}`);
+    return process.env.APP_PUBLIC_URL.trim();
+  }
+  
+  // Fallback to config URL
+  console.log(`Using config.baseUrl() for email: ${config.baseUrl()}`);
+  return config.baseUrl();
 }
 
 /**
@@ -47,6 +58,7 @@ function getEmailBaseUrl() {
 async function sendConfirmationEmail(email, url, scanId) {
   try {
     const baseUrl = getEmailBaseUrl();
+    console.log(`Using baseUrl for confirmation email: ${baseUrl}`);
     const html = confirmationTemplate(baseUrl, url, scanId);
     
     await sendEmail({
@@ -74,6 +86,7 @@ async function sendConfirmationEmail(email, url, scanId) {
 async function sendResultsEmail(email, url, scanId, summary) {
   try {
     const baseUrl = getEmailBaseUrl();
+    console.log(`Using baseUrl for results email: ${baseUrl}`);
     const html = resultsTemplate(baseUrl, url, scanId, summary);
     
     await sendEmail({
@@ -102,6 +115,7 @@ async function sendResultsEmail(email, url, scanId, summary) {
 async function sendAdminResultsEmail(adminEmail, url, userEmail, scanId, summary) {
   try {
     const baseUrl = getEmailBaseUrl();
+    console.log(`Using baseUrl for admin results email: ${baseUrl}`);
     const html = adminResultsTemplate(baseUrl, url, userEmail, scanId, summary);
     
     await sendEmail({
@@ -129,6 +143,7 @@ async function sendAdminResultsEmail(adminEmail, url, userEmail, scanId, summary
 async function sendDeepScanNotification(adminEmail, url, scanId, score) {
   try {
     const baseUrl = getEmailBaseUrl();
+    console.log(`Using baseUrl for deep scan email: ${baseUrl}`);
     const html = deepScanTemplate(baseUrl, url, scanId, score);
     
     await sendEmail({
@@ -156,6 +171,7 @@ async function sendDeepScanNotification(adminEmail, url, scanId, score) {
 async function sendErrorEmail(email, url, scanId, errorMessage) {
   try {
     const baseUrl = getEmailBaseUrl();
+    console.log(`Using baseUrl for error email: ${baseUrl}`);
     const html = errorTemplate(baseUrl, url, scanId, errorMessage);
     
     await sendEmail({

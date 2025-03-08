@@ -2,10 +2,13 @@
  * Error notification email when a scan fails
  */
 module.exports = (baseUrl, url, scanId, errorMessage) => {
+  // Ensure baseUrl doesn't have trailing slashes and is trimmed
+  const cleanBaseUrl = baseUrl.trim().replace(/\/+$/, '');
+  
   return `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
       <div style="text-align: center; margin-bottom: 20px;">
-        <img src="${baseUrl}/images/a11yscan-logo.svg" alt="A11yscan Logo" width="180" height="50" style="display: inline-block;">
+        <img src="${cleanBaseUrl}/images/a11yscan-logo.svg" alt="A11yscan Logo" width="180" height="50" style="display: inline-block;">
       </div>
       
       <h1 style="color: #4f46e5; margin-bottom: 20px;">Issue with Your Accessibility Scan</h1>
@@ -35,7 +38,7 @@ module.exports = (baseUrl, url, scanId, errorMessage) => {
       <p>Please try again later or contact us if you continue experiencing issues.</p>
       
       <div style="text-align: center; margin: 30px 0;">
-        <a href="${baseUrl}/#scan" style="background-color: #4f46e5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block;">Try Again</a>
+        <a href="${cleanBaseUrl}/#scan" style="background-color: #4f46e5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block;">Try Again</a>
       </div>
       
       <p>Thank you for your understanding.</p>

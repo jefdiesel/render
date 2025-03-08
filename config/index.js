@@ -69,10 +69,18 @@ module.exports = {
     }
   },
   baseUrl: () => {
-    // Use APP_PUBLIC_URL if available, otherwise default to a11yscan.xyz in production
-    return process.env.NODE_ENV === 'production'
-      ? (process.env.APP_PUBLIC_URL || 'https://a11yscan.xyz').trim()
-      : `http://localhost:${module.exports.port}`;
+    // Always use APP_PUBLIC_URL in production
+    if (process.env.NODE_ENV === 'production' && process.env.APP_PUBLIC_URL) {
+      return process.env.APP_PUBLIC_URL.trim();
+    }
+    
+    // Force production URL even in development mode
+    if (process.env.FORCE_PRODUCTION_URLS === 'true' && process.env.APP_PUBLIC_URL) {
+      return process.env.APP_PUBLIC_URL.trim();
+    }
+    
+    // Default for local development
+    return `http://localhost:${module.exports.port}`;
   },
   reportsBaseUrl: () => {
     // If using R2 with custom domain for reports
@@ -81,9 +89,19 @@ module.exports = {
       return domain.startsWith('http') ? domain : `https://${domain}`;
     }
     
-    // Otherwise use app URL
+    // Otherwise use app URL - prioritize APP_PUBLIC_URL
+    if (process.env.NODE_ENV === 'production' && process.env.APP_PUBLIC_URL) {
+      return process.env.APP_PUBLIC_URL.trim();
+    }
+    
+    // Force production URL even in development
+    if (process.env.FORCE_PRODUCTION_URLS === 'true' && process.env.APP_PUBLIC_URL) {
+      return process.env.APP_PUBLIC_URL.trim();
+    }
+    
+    // Fallback to default URL
     return process.env.NODE_ENV === 'production'
-      ? (process.env.APP_PUBLIC_URL || 'https://render-docker-fdf0.onrender.com').trim()
+      ? 'https://render-docker-fdf0.onrender.com'
       : `http://localhost:${module.exports.port}`;
   }
 };

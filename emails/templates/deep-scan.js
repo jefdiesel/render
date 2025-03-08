@@ -2,10 +2,14 @@
  * Deep scan notification email when a site scores above threshold
  */
 module.exports = (baseUrl, url, scanId, score) => {
+  // Ensure baseUrl doesn't have trailing slashes and is trimmed
+  const cleanBaseUrl = baseUrl.trim().replace(/\/+$/, '');
+  const reportUrl = `${cleanBaseUrl}/reports/${scanId}`;
+  
   return `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
       <div style="text-align: center; margin-bottom: 20px;">
-        <img src="${baseUrl}/images/a11yscan-logo.svg" alt="A11yscan Logo" width="180" height="50" style="display: inline-block;">
+        <img src="${cleanBaseUrl}/images/a11yscan-logo.svg" alt="A11yscan Logo" width="180" height="50" style="display: inline-block;">
       </div>
       
       <h1 style="color: #4f46e5; margin-bottom: 20px;">High Scoring Website Detected</h1>
@@ -23,7 +27,7 @@ module.exports = (baseUrl, url, scanId, score) => {
       <p>This site may be a good prospect for showcasing the benefits of our premium services.</p>
       
       <div style="text-align: center; margin: 30px 0;">
-        <a href="${baseUrl.trim()}/reports/${scanId}" style="background-color: #4f46e5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block;">View Scan Report</a>
+        <a href="${reportUrl}" style="background-color: #4f46e5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block;">View Scan Report</a>
       </div>
       
       <p>Best regards,<br>The A11yscan System</p>

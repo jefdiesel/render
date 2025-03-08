@@ -2,10 +2,13 @@
  * Confirmation email sent when a scan is initiated
  */
 module.exports = (baseUrl, url, scanId) => {
+  // Ensure baseUrl doesn't have trailing slashes and is trimmed
+  const cleanBaseUrl = baseUrl.trim().replace(/\/+$/, '');
+  
   return `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
       <div style="text-align: center; margin-bottom: 20px;">
-        <img src="${baseUrl}/images/a11yscan-logo.svg" alt="A11yscan Logo" width="180" height="50" style="display: inline-block;">
+        <img src="${cleanBaseUrl}/images/a11yscan-logo.svg" alt="A11yscan Logo" width="180" height="50" style="display: inline-block;">
       </div>
       
       <h1 style="color: #4f46e5; margin-bottom: 20px;">Your Accessibility Scan Has Started</h1>
@@ -23,7 +26,7 @@ module.exports = (baseUrl, url, scanId) => {
       
       <p>Once the scan is finished, we'll send you another email with your detailed accessibility report.</p>
       
-      <p>In the meantime, you can check your scan status <a href="${baseUrl}/scan-status.html?id=${scanId}" style="color: #4f46e5;">here</a>.</p>
+      <p>In the meantime, you can check your scan status <a href="${cleanBaseUrl}/scan-status.html?id=${scanId}" style="color: #4f46e5;">here</a>.</p>
       
       <p>Thank you for making the web more accessible for everyone!</p>
       

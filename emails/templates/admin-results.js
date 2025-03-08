@@ -2,12 +2,14 @@
  * Admin notification email sent when a scan is completed
  */
 module.exports = (baseUrl, url, userEmail, scanId, summary) => {
-  const reportUrl = `${baseUrl.trim()}/reports/${scanId}`;
+  // Ensure baseUrl doesn't have trailing slashes and is trimmed
+  const cleanBaseUrl = baseUrl.trim().replace(/\/+$/, '');
+  const reportUrl = `${cleanBaseUrl}/reports/${scanId}`;
   
   return `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
       <div style="text-align: center; margin-bottom: 20px;">
-        <img src="${baseUrl}/images/a11yscan-logo.svg" alt="A11yscan Logo" width="180" height="50" style="display: inline-block;">
+        <img src="${cleanBaseUrl}/images/a11yscan-logo.svg" alt="A11yscan Logo" width="180" height="50" style="display: inline-block;">
       </div>
       
       <h1 style="color: #4f46e5; margin-bottom: 20px;">New Accessibility Scan Completed</h1>
