@@ -1,10 +1,13 @@
 /**
  * Deep scan notification email when a site scores above threshold
  */
-module.exports = (baseUrl, url, scanId, score) => {
-  // Ensure baseUrl doesn't have trailing slashes and is trimmed
+module.exports = (baseUrl, reportsBaseUrl, url, scanId, score) => {
+  // Ensure URLs don't have trailing slashes and are trimmed
   const cleanBaseUrl = baseUrl.trim().replace(/\/+$/, '');
-  const reportUrl = `${cleanBaseUrl}/reports/${scanId}`;
+  const cleanReportsBaseUrl = reportsBaseUrl.trim().replace(/\/+$/, '');
+  
+  // Use reports URL for the report link
+  const reportUrl = `${cleanReportsBaseUrl}/reports/${scanId}`;
   
   return `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">

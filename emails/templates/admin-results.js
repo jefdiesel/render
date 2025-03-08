@@ -1,10 +1,13 @@
 /**
  * Admin notification email sent when a scan is completed
  */
-module.exports = (baseUrl, url, userEmail, scanId, summary) => {
-  // Ensure baseUrl doesn't have trailing slashes and is trimmed
+module.exports = (baseUrl, reportsBaseUrl, url, userEmail, scanId, summary) => {
+  // Ensure URLs don't have trailing slashes and are trimmed
   const cleanBaseUrl = baseUrl.trim().replace(/\/+$/, '');
-  const reportUrl = `${cleanBaseUrl}/reports/${scanId}`;
+  const cleanReportsBaseUrl = reportsBaseUrl.trim().replace(/\/+$/, '');
+  
+  // Use reports URL for the report link
+  const reportUrl = `${cleanReportsBaseUrl}/reports/${scanId}`;
   
   return `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">

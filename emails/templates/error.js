@@ -1,8 +1,8 @@
 /**
  * Error notification email when a scan fails
  */
-module.exports = (baseUrl, url, scanId, errorMessage) => {
-  // Ensure baseUrl doesn't have trailing slashes and is trimmed
+module.exports = (baseUrl, reportsBaseUrl, url, scanId, errorMessage) => {
+  // Ensure URLs don't have trailing slashes and are trimmed
   const cleanBaseUrl = baseUrl.trim().replace(/\/+$/, '');
   
   return `

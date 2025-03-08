@@ -1,8 +1,8 @@
 /**
  * Confirmation email sent when a scan is initiated
  */
-module.exports = (baseUrl, url, scanId) => {
-  // Ensure baseUrl doesn't have trailing slashes and is trimmed
+module.exports = (baseUrl, reportsBaseUrl, url, scanId) => {
+  // Ensure URLs don't have trailing slashes and are trimmed
   const cleanBaseUrl = baseUrl.trim().replace(/\/+$/, '');
   
   return `

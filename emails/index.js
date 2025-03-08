@@ -49,6 +49,14 @@ function getEmailBaseUrl() {
 }
 
 /**
+ * Get the reports base URL for email links
+ * @returns {string} - Reports URL to use in emails
+ */
+function getReportsBaseUrl() {
+  return config.reportsBaseUrl();
+}
+
+/**
  * Send confirmation email when a scan is started
  * @param {string} email - Recipient email
  * @param {string} url - Scanned URL
@@ -58,8 +66,9 @@ function getEmailBaseUrl() {
 async function sendConfirmationEmail(email, url, scanId) {
   try {
     const baseUrl = getEmailBaseUrl();
-    console.log(`Using baseUrl for confirmation email: ${baseUrl}`);
-    const html = confirmationTemplate(baseUrl, url, scanId);
+    const reportsBaseUrl = getReportsBaseUrl();
+    console.log(`Using baseUrl: ${baseUrl}, reportsBaseUrl: ${reportsBaseUrl}`);
+    const html = confirmationTemplate(baseUrl, reportsBaseUrl, url, scanId);
     
     await sendEmail({
       to: email,
@@ -86,8 +95,9 @@ async function sendConfirmationEmail(email, url, scanId) {
 async function sendResultsEmail(email, url, scanId, summary) {
   try {
     const baseUrl = getEmailBaseUrl();
-    console.log(`Using baseUrl for results email: ${baseUrl}`);
-    const html = resultsTemplate(baseUrl, url, scanId, summary);
+    const reportsBaseUrl = getReportsBaseUrl();
+    console.log(`Using baseUrl: ${baseUrl}, reportsBaseUrl: ${reportsBaseUrl}`);
+    const html = resultsTemplate(baseUrl, reportsBaseUrl, url, scanId, summary);
     
     await sendEmail({
       to: email,
@@ -115,8 +125,9 @@ async function sendResultsEmail(email, url, scanId, summary) {
 async function sendAdminResultsEmail(adminEmail, url, userEmail, scanId, summary) {
   try {
     const baseUrl = getEmailBaseUrl();
-    console.log(`Using baseUrl for admin results email: ${baseUrl}`);
-    const html = adminResultsTemplate(baseUrl, url, userEmail, scanId, summary);
+    const reportsBaseUrl = getReportsBaseUrl();
+    console.log(`Using baseUrl: ${baseUrl}, reportsBaseUrl: ${reportsBaseUrl}`);
+    const html = adminResultsTemplate(baseUrl, reportsBaseUrl, url, userEmail, scanId, summary);
     
     await sendEmail({
       to: adminEmail,
@@ -143,8 +154,9 @@ async function sendAdminResultsEmail(adminEmail, url, userEmail, scanId, summary
 async function sendDeepScanNotification(adminEmail, url, scanId, score) {
   try {
     const baseUrl = getEmailBaseUrl();
-    console.log(`Using baseUrl for deep scan email: ${baseUrl}`);
-    const html = deepScanTemplate(baseUrl, url, scanId, score);
+    const reportsBaseUrl = getReportsBaseUrl();
+    console.log(`Using baseUrl: ${baseUrl}, reportsBaseUrl: ${reportsBaseUrl}`);
+    const html = deepScanTemplate(baseUrl, reportsBaseUrl, url, scanId, score);
     
     await sendEmail({
       to: adminEmail,
@@ -171,8 +183,9 @@ async function sendDeepScanNotification(adminEmail, url, scanId, score) {
 async function sendErrorEmail(email, url, scanId, errorMessage) {
   try {
     const baseUrl = getEmailBaseUrl();
-    console.log(`Using baseUrl for error email: ${baseUrl}`);
-    const html = errorTemplate(baseUrl, url, scanId, errorMessage);
+    const reportsBaseUrl = getReportsBaseUrl();
+    console.log(`Using baseUrl: ${baseUrl}, reportsBaseUrl: ${reportsBaseUrl}`);
+    const html = errorTemplate(baseUrl, reportsBaseUrl, url, scanId, errorMessage);
     
     await sendEmail({
       to: email,
