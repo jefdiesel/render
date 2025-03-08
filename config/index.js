@@ -19,27 +19,23 @@ module.exports = {
     adminEmail: process.env.ADMIN_EMAIL || 'hello@a11yscan.xyz'
   },
   cors: {
-    // Use environment variables if available, otherwise use defaults
-    origin: process.env.CORS_ALLOW_ORIGIN 
-      ? process.env.CORS_ALLOW_ORIGIN.split(',') 
-      : (process.env.NODE_ENV === 'production' 
-        ? ['https://a11yscan.xyz', 'https://www.a11yscan.xyz', 'https://render-docker-fdf0.onrender.com'] 
-        : ['http://localhost:3000']),
-    
-    // Allow necessary methods
-    methods: process.env.CORS_ALLOW_METHODS 
-      ? process.env.CORS_ALLOW_METHODS.split(',') 
-      : ['GET', 'POST', 'OPTIONS', 'PUT', 'DELETE'],
-    
-    // Comprehensive headers
-    allowedHeaders: process.env.CORS_ALLOW_HEADERS
-      ? process.env.CORS_ALLOW_HEADERS.split(',')
-      : ['Content-Type', 'X-API-Key', 'Origin', 'Accept', 'Authorization'],
-    
-    // Enable credentials support
+    origin: process.env.NODE_ENV === 'production' 
+      ? ['https://a11yscan.xyz', 'https://funcles.xyz'] 
+      : [
+          'http://localhost:3000', 
+          'https://render-docker-fdf0.onrender.com',
+          'http://localhost:8080',
+          'http://127.0.0.1:3000'
+        ],
+    methods: ['GET', 'POST', 'OPTIONS', 'PUT', 'DELETE'],
+    allowedHeaders: [
+      'Content-Type', 
+      'X-API-Key', 
+      'Origin', 
+      'Accept', 
+      'Authorization'
+    ],
     credentials: true,
-    
-    // Additional CORS configuration
     preflightContinue: false,
     optionsSuccessStatus: 204
   },
@@ -52,14 +48,11 @@ module.exports = {
     csvReports: path.join(__dirname, '..', 'reports', 'csv')
   },
   scan: {
-    deepScanThreshold: 90, // Score threshold to trigger deep scan
-    maxPages: 5 // Maximum pages for free scan
+    deepScanThreshold: 90,
+    maxPages: 5
   },
   storage: {
-    // Whether to use R2 or local filesystem
     useR2: process.env.STORAGE_USE_R2 === 'true',
-    
-    // R2 folder paths
     r2: {
       reports: 'reports',
       pdf: 'reports/pdf',
@@ -69,39 +62,26 @@ module.exports = {
     }
   },
   baseUrl: () => {
-    // Always use APP_PUBLIC_URL in production
-    if (process.env.NODE_ENV === 'production' && process.env.APP_PUBLIC_URL) {
-      return process.env.APP_PUBLIC_URL.trim();
-    }
-    
-    // Force production URL even in development mode
-    if (process.env.FORCE_PRODUCTION_URLS === 'true' && process.env.APP_PUBLIC_URL) {
-      return process.env.APP_PUBLIC_URL.trim();
-    }
-    
-    // Default for local development
-    return `http://localhost:${module.exports.port}`;
+    return process.env.NODE_ENV === 'production'
+      ? (process.env.APP_PUBLIC_URL || 'https://a11yscan.xyz')
+      : `http://localhost:${module.exports.port}`;
   },
   reportsBaseUrl: () => {
-    // If using R2 with custom domain for reports
-    if (process.env.STORAGE_USE_R2 === 'true' && process.env.R2_PUBLIC_DOMAIN) {
-      const domain = process.env.R2_PUBLIC_DOMAIN.trim();
-      return domain.startsWith('http') ? domain : `https://${domain}`;
-    }
+    // Use the REPORTS_DOMAIN for report URLs
+    return process.env.REPORTS_DOMAIN || (
+      process.env.NODE_ENV === 'production'
+        ? 'https://funcles.xyz'
+        : `http://localhost:${module.exports.port}`
+    );
+  },
+  reportUrlGenerator: (scanId, type) => {
+    const baseUrl = module.exports.reportsBaseUrl();
+    const validTypes = ['pdf', 'csv'];
     
-    // Otherwise use app URL - prioritize APP_PUBLIC_URL
-    if (process.env.NODE_ENV === 'production' && process.env.APP_PUBLIC_URL) {
-      return process.env.APP_PUBLIC_URL.trim();
+    if (!validTypes.includes(type)) {
+      throw new Error(`Invalid report type: ${type}`);
     }
-    
-    // Force production URL even in development
-    if (process.env.FORCE_PRODUCTION_URLS === 'true' && process.env.APP_PUBLIC_URL) {
-      return process.env.APP_PUBLIC_URL.trim();
-    }
-    
-    // Fallback to default URL
-    return process.env.NODE_ENV === 'production'
-      ? 'https://render-docker-fdf0.onrender.com'
-      : `http://localhost:${module.exports.port}`;
+
+    return `${baseUrl}/reports/${type}/${scanId}.${type}`;
   }
 };
